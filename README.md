@@ -1,4 +1,4 @@
-# Resource Planning Dashboard in Power BI (HTML + CSS, no JavaScript)
+# Resource Planning Dashboard in Power BI
 
 An interactive resource-planning page built in **Power BI** with a single **DAX measure** that renders HTML, CSS and SVG inside the *HTML Content* visual. Every click on the page (expanding rows, switching views, moving between weeks, dark mode) is pure CSS: the visual runs no JavaScript.
 

@@ -1,0 +1,11 @@
+﻿Project_ID,Project,Kunde,Priorität,Lead_Team,Start_Date,End_Date,Budget_h
+J001,Falke CRM,Nordhafen AG,Hoch,Team Falke,2026-07-20,2026-11-15,2950
+J002,Orion Portal,Brevia GmbH,Mittel,Team Kranich,2026-10-19,2027-03-28,1690
+J003,Kranich App,Kaltstein KG,Mittel,Team Möwe,2026-09-21,2027-03-14,2410
+J004,Delta Migration,Nordhafen AG,Mittel,Team Reiher,2026-10-12,2027-01-24,1450
+J005,Lumen BI,Ostwerk GmbH,Mittel,Team Falke,2026-09-07,2027-01-03,1100
+J006,Saturn Shop,Brevia GmbH,Mittel,Team Kranich,2026-08-31,2027-03-28,2640
+J007,Fluss API,Lindtal AG,Niedrig,Team Möwe,2026-09-14,2027-01-03,1130
+J008,Merkur Data,Ostwerk GmbH,Hoch,Team Reiher,2026-09-14,2027-01-10,1160
+J009,Iris Mobile,Kaltstein KG,Niedrig,Team Falke,2026-10-19,2027-03-28,2320
+J010,Zenit Support,intern,Hoch,Team Kranich,2026-07-06,2027-03-28,5310

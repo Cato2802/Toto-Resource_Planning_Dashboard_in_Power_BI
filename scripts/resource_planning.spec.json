@@ -1,0 +1,33 @@
+{
+  "name": "ressourcenplanung",
+  "seed": 7,
+  "start": "2026-07-06",
+  "end": "2027-03-28",
+  "dims": [
+    {"name": "dim_team", "key": "Team_ID", "prefix": "T", "size": 4,
+     "columns": {
+       "Team": {"labels": ["Team Falke", "Team Kranich", "Team Möwe", "Team Reiher"]},
+       "Bereich": {"labels": ["Delivery", "Delivery", "Platform", "Platform"]}
+     }},
+    {"name": "dim_person", "key": "Person_ID", "prefix": "E", "size": 20,
+     "columns": {
+       "Name": {"labels": ["Lena Brückner", "Tomas Weiland", "Ayla Demirci", "Jonas Petrich", "Nora Lindholm",
+                           "Malik Osei", "Sina Hartwig", "Paul Reinke", "Yuki Tanabe", "Clara Mendes",
+                           "Erik Sandvoss", "Hana Novak", "Leon Kaspar", "Mira Albers", "Ole Brandes",
+                           "Priya Raman", "Felix Unger", "Ida Wernicke", "Samir Haddou", "Greta Voss"]},
+       "Role": {"values": ["PM", "PO", "Entwickler"], "weights": [3, 3, 14]},
+       "Team_ID": {"values": ["T001", "T002", "T003", "T004"], "weights": [1, 1, 1, 1]},
+       "Standort": {"values": ["Hamburg", "Berlin", "München", "Köln"], "weights": [0.4, 0.3, 0.2, 0.1]},
+       "Weekly_Capacity": {"values": [40, 32, 24], "weights": [0.7, 0.2, 0.1]}
+     }},
+    {"name": "dim_project", "key": "Project_ID", "prefix": "J", "size": 10,
+     "columns": {
+       "Project": {"labels": ["Falke CRM", "Orion Portal", "Kranich App", "Delta Migration", "Lumen BI",
+                              "Saturn Shop", "Fluss API", "Merkur Data", "Iris Mobile", "Zenit Support"]},
+       "Kunde": {"labels": ["Nordhafen AG", "Brevia GmbH", "Kaltstein KG", "Nordhafen AG", "Ostwerk GmbH",
+                            "Brevia GmbH", "Lindtal AG", "Ostwerk GmbH", "Kaltstein KG", "intern"]},
+       "Priorität": {"values": ["Hoch", "Mittel", "Niedrig"], "weights": [0.3, 0.5, 0.2]}
+     }}
+  ],
+  "facts": []
+}

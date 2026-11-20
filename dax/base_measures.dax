@@ -1,0 +1,177 @@
+// =====================================================================
+// base_measures.dax  –  Ressourcenplanung (dữ liệu giả lập)
+// Tạo bảng trống _measure, rồi tạo từng measure dưới đây (New measure → dán).
+// Quan hệ cần có: fact_capacity[Person_ID], fact_allocation[Person_ID] → dim_person
+//                 fact_allocation[Project_ID] → dim_project
+//                 fact_capacity[Date], fact_allocation[Date] → dim_date[Date]
+//                 dim_person[Team_ID] → dim_team
+// =====================================================================
+
+
+// ---------- 0. Tuần hiện tại ----------
+// Dữ liệu mẫu được dựng quanh KW 47/2026 (tuần bắt đầu 16/11/2026), nên cố định ngày này.
+// Khi dùng dữ liệu thật, đổi thành:  VAR t = TODAY() RETURN t - WEEKDAY ( t, 3 )
+Cur Week Start =
+DATE ( 2026, 11, 16 )
+
+Cur Week Label =
+"KW " & WEEKNUM ( [Cur Week Start], 21 ) & ", aktuell"
+
+
+// ---------- 1. Measure nền ----------
+Capacity h =
+SUM ( fact_capacity[Capacity_h] )
+
+Absence h =
+SUM ( fact_capacity[Absence_h] )
+
+Available h =
+[Capacity h] - [Absence h]
+
+Planned h =
+SUM ( fact_allocation[Planned_h] )
+
+Utilization % =
+DIVIDE ( [Planned h], [Available h] )
+
+// Giờ trống: tính theo từng người × từng tuần rồi cộng lại, để giờ thừa của người này
+// không bù cho giờ quá tải của người khác
+Free h =
+SUMX (
+    SUMMARIZE ( fact_capacity, dim_person[Person_ID], dim_date[Week_Start] ),
+    VAR av = CALCULATE ( [Available h] )
+    VAR pl = CALCULATE ( [Planned h] )
+    RETURN MAX ( 0, av - pl )
+)
+
+Overplanned h =
+SUMX (
+    SUMMARIZE ( fact_capacity, dim_person[Person_ID], dim_date[Week_Start] ),
+    VAR av = CALCULATE ( [Available h] )
+    VAR pl = CALCULATE ( [Planned h] )
+    RETURN MAX ( 0, pl - av )
+)
+
+
+// ---------- 2. Cửa sổ 16 tuần từ tuần hiện tại (3 thẻ bên phải) ----------
+Planned h 16KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE ( [Planned h], REMOVEFILTERS ( dim_date ), dim_date[Date] >= s, dim_date[Date] < s + 16 * 7 )
+
+Available h 16KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE ( [Available h], REMOVEFILTERS ( dim_date ), dim_date[Date] >= s, dim_date[Date] < s + 16 * 7 )
+
+Utilization % 16KW =
+DIVIDE ( [Planned h 16KW], [Available h 16KW] )
+
+Free h 16KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE ( [Free h], REMOVEFILTERS ( dim_date ), dim_date[Date] >= s, dim_date[Date] < s + 16 * 7 )
+
+Overplanned h 16KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE ( [Overplanned h], REMOVEFILTERS ( dim_date ), dim_date[Date] >= s, dim_date[Date] < s + 16 * 7 )
+
+// Thứ hạng dự án theo giờ đã xếp trong 16 tuần (thẻ "Projekte", lấy top 5)
+Project Rank 16KW =
+IF (
+    HASONEVALUE ( dim_project[Project_ID] ),
+    RANKX ( ALLSELECTED ( dim_project ), [Planned h 16KW],, DESC, DENSE )
+)
+
+// Thứ hạng người theo giờ còn trống trong 16 tuần (thẻ "Frei")
+Person Free Rank 16KW =
+IF (
+    HASONEVALUE ( dim_person[Person_ID] ),
+    RANKX ( ALLSELECTED ( dim_person ), [Free h 16KW],, DESC, DENSE )
+)
+
+
+// ---------- 3. Chip đếm của tuần hiện tại ----------
+// abwesend: có năng lực nhưng vắng cả tuần
+# Abwesend KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE (
+        COUNTROWS ( FILTER ( VALUES ( dim_person[Person_ID] ), [Capacity h] > 0 && [Available h] = 0 ) ),
+        REMOVEFILTERS ( dim_date ), dim_date[Week_Start] = s
+    )
+
+// überplant: giờ xếp > giờ có mặt
+# Ueberplant KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE (
+        COUNTROWS ( FILTER ( VALUES ( dim_person[Person_ID] ), [Available h] > 0 && [Planned h] > [Available h] ) ),
+        REMOVEFILTERS ( dim_date ), dim_date[Week_Start] = s
+    )
+
+// < 8 h frei: còn trống từ 0 đến dưới 8 giờ
+# Unter8h KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE (
+        COUNTROWS (
+            FILTER (
+                VALUES ( dim_person[Person_ID] ),
+                VAR fr = [Available h] - [Planned h]
+                RETURN [Available h] > 0 && fr >= 0 && fr < 8
+            )
+        ),
+        REMOVEFILTERS ( dim_date ), dim_date[Week_Start] = s
+    )
+
+// frei: còn trống từ 8 giờ trở lên
+# Frei KW =
+VAR s = [Cur Week Start]
+RETURN
+    CALCULATE (
+        COUNTROWS ( FILTER ( VALUES ( dim_person[Person_ID] ), [Available h] - [Planned h] >= 8 ) ),
+        REMOVEFILTERS ( dim_date ), dim_date[Week_Start] = s
+    )
+
+
+// ---------- 4. Ô heatmap (người/team × tuần) ----------
+// Trạng thái ô, để HTML chọn kiểu vẽ: abw / ueber / voll / frei / leer
+Cell Status =
+VAR av = [Available h]
+VAR pl = [Planned h]
+RETURN
+    SWITCH (
+        TRUE (),
+        [Capacity h] > 0 && av = 0, "abw",
+        av > 0 && pl > av, "ueber",
+        av > 0 && av - pl < 8, "voll",
+        pl > 0, "frei",
+        "leer"
+    )
+
+
+// ---------- 5. Nút Personen | Team ----------
+// Tạo bảng (Modeling → New table):
+//   View_Selector = DATATABLE ( "View", STRING, "Sort", INTEGER, { { "Personen", 1 }, { "Team", 2 } } )
+// rồi làm slicer dạng button trên View_Selector[View]. Measure HTML đọc giá trị này:
+Selected View =
+SELECTEDVALUE ( View_Selector[View], "Personen" )
+
+
+// ---------- 6. Số đã định dạng để đưa vào HTML ----------
+Utilization 16KW fmt =
+FORMAT ( [Utilization % 16KW], "0%", "en-US" )
+
+Planned 16KW fmt =
+FORMAT ( [Planned h 16KW], "#,0", "en-US" ) & " h"
+
+Available 16KW fmt =
+FORMAT ( [Available h 16KW], "#,0", "en-US" ) & " h"
+
+Free 16KW fmt =
+FORMAT ( [Free h 16KW], "#,0", "en-US" ) & " h"
+
+Overplanned 16KW fmt =
+FORMAT ( [Overplanned h 16KW], "#,0", "en-US" ) & " h"

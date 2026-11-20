@@ -1,0 +1,1328 @@
+HTML Ressourcenplanung =
+// =====================================================================
+// KẾ HOẠCH NGUỒN LỰC (dựng theo mẫu Ressourcenplanung): 1 measure cho 1 visual HTML Content (Secure)
+// Hàng 1: tiêu đề + trạng thái bộ lọc
+// Hàng 2: [trái] tóm tắt tuần + ma trận tải (người hoặc team); mở ra luôn ở tuần hiện tại, bấm ‹ › ở hàng tiêu đề để lùi / tiến từng tuần
+//         [phải] Mức tải | Top 5 dự án | Ai còn trống (18 tuần tới)
+// Cần có sẵn các measure trong base_measures.dax và bảng rời Person_Pick (xem README).
+// =====================================================================
+
+// Số tuần nhìn thấy cùng lúc, tính từ tuần hiện tại (đổi 18 thành số nhỏ hơn nếu muốn ô rộng hơn)
+VAR _nW = 18
+// Số tuần quá khứ xem được bằng mũi tên ‹ (càng nhiều thì measure càng nặng)
+VAR _nPast = 12
+
+// ---------- A. CSS (chia nhiều chuỗi ngắn để không bị lỗi Invalid token) ----------
+VAR _css1 =
+"
+/* ===== 0. Dùng chung + bố cục trang ===== */
+*{box-sizing:border-box}
+.pg{display:flex;flex-direction:column;gap:20px;padding:4px 6px 12px;font-family:'Segoe UI',sans-serif;color:#1F2937;font-size:17px}
+/* Panel trắng bo góc */
+.pnl{background:#fff;border:1px solid #E5E7EB;border-radius:16px;padding:20px 24px;box-shadow:0 4px 14px rgba(15,23,42,.05);min-width:0}
+/* Tỷ lệ độ rộng: cột ma trận 3.1 : cột thẻ bên phải 1 */
+.main{display:grid;grid-template-columns:minmax(0,3.1fr) minmax(0,1fr);gap:20px}
+.side{display:flex;flex-direction:column;gap:20px;min-width:0}
+.side>.pnl:last-child{flex:1}
+h3{margin:0;font-size:19px;font-weight:600}
+.scp{font-size:14px;color:#2563EB;margin:2px 0 14px}
+
+/* ===== 1. Thanh tiêu đề + chỗ trống đặt slicer ===== */
+/* Đổi 84px: chiều cao thanh tiêu đề */
+.hdr{display:flex;align-items:center;gap:16px;padding:0 24px;height:84px}
+.hdr .dkb{margin-left:auto}
+.logo{width:52px;height:52px;flex:none}
+.ttl{font-size:30px;font-weight:700;line-height:34px}
+.sub{font-size:15px;color:#6B7280;white-space:nowrap}
+/* Khoảng trống đặt slicer: đổi 1200px / 56px nếu cần chỗ rộng hơn, cao hơn */
+.slot{margin-left:16px;width:1200px;max-width:45%;height:56px;flex:none;border-radius:12px;background:#F9FAFB}
+
+/* ===== 9. Tooltip: rê chuột vào phần tử có class tt thì hộp .tip hiện ra ===== */
+.tt{position:relative}
+.tip{display:none;position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);z-index:9;background:#111827;color:#fff;border-radius:12px;padding:12px 18px;font-size:22px;font-weight:400;line-height:1.5;white-space:nowrap;text-align:left;box-shadow:0 8px 24px rgba(0,0,0,.3);pointer-events:none}
+.tip b{color:#93C5FD;font-weight:700}
+.tip em{color:#FCA5A5;font-style:normal}
+/* .tip.l canh trái, .tip.r canh phải (dùng cho ô sát mép) */
+.tip.l{left:0;transform:none}
+.tip.r{left:auto;right:0;transform:none}
+.tt:hover .tip{display:block}
+"
+VAR _css2 =
+"
+/* ===== 2. Tóm tắt tuần hiện tại (4 chip đếm + chú thích) ===== */
+.sum{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.kw{font-size:22px;font-weight:700;margin-right:8px;line-height:1.1}
+.kw small{display:block;font-size:14px;font-weight:400;color:#6B7280}
+.cnt{display:inline-flex;align-items:center;gap:8px;font-size:16px;color:#374151;padding:6px 12px;border-radius:10px;background:#F3F4F6}
+.cnt b{font-size:20px;color:#111827}
+.sq{width:14px;height:14px;border-radius:4px;display:inline-block}
+.sq1{background:#2563EB}
+.sq2{background:#93A3B8}
+.sq3{background:#DC2626;animation:pu 1.8s infinite}
+.sq4{background:#D1D5DB}
+.lgd{margin-left:auto;display:flex;gap:16px;font-size:14px;color:#6B7280;align-items:center}
+.lgd i{display:inline-block;width:22px;height:14px;border-radius:3px;margin-right:6px;vertical-align:-2px}
+
+/* ===== 3. Ma trận tải: mỗi hàng là 1 người / nhóm / team ===== */
+/* 300px: cột tên | các cột tuần chia đều | 150px: cột tổng. Đổi 46px để đổi chiều cao mỗi hàng */
+.mr{display:grid;grid-template-columns:300px repeat(" & _nW & ",minmax(0,1fr)) 150px;align-items:center;column-gap:6px;height:46px;border-bottom:1px solid #F1F3F6;transition:background .2s}
+.mr:hover{background:#F8FAFC}
+.hd{height:64px;border-bottom:1px solid #E5E7EB}
+.hd:hover{background:none}
+/* Hàng nhóm vai trò (PM, PO, Entwickler) nền xám nhạt */
+.rg{background:#F9FAFB}
+.nm{display:flex;align-items:center;gap:10px;min-width:0;padding-left:6px}
+.nt{min-width:0;line-height:1.15}
+.nt b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nt small{font-size:13px;color:#6B7280;white-space:nowrap}
+.rg .nt b{font-size:17px}
+/* Avatar chữ cái đầu, màu theo team */
+.av{width:32px;height:32px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;font-style:normal;color:#fff;flex:none;border:2px solid #fff}
+.avs{display:flex;flex:none}
+.avs .av+.av{margin-left:-12px}
+.a1{background:#2563EB}
+.a2{background:#0EA5E9}
+.a3{background:#6366F1}
+.a4{background:#64748B}
+/* Ô tiêu đề tuần: tuần hiện tại là pill xanh */
+.wh{text-align:center;line-height:1.25}
+.wh b{display:inline-block;font-size:16px;min-width:40px;padding:2px 8px;border-radius:999px}
+.wh small{display:block;font-size:12px;color:#6B7280}
+.wh.cw b{background:#2563EB;color:#fff}
+"
+VAR _css3 =
+"
+/* ===== 4. Ô tải trong ma trận ===== */
+.ce{align-self:stretch;display:flex;align-items:center}
+/* Cột tuần hiện tại nền xanh rất nhạt */
+.ce.cw{background:#EEF4FF}
+/* Đổi 30px để đổi chiều cao ô */
+.cb{position:relative;width:100%;height:30px;background:#EEF1F5;border-radius:5px;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.cb span{position:relative;z-index:1;font-size:13px;font-weight:700;color:#1F2937;text-shadow:0 0 3px #fff,0 0 3px #fff}
+/* Phần tô từ đáy lên = % tải; mọc dần khi mở trang (đổi .7s để nhanh chậm) */
+.fl{position:absolute;left:0;right:0;bottom:0;transform-origin:bottom;animation:gr .7s ease-out both}
+/* fu: tải từ 90% trở lên (gạch chéo đậm), fr: dưới 90% (gạch chéo nhạt) */
+.fu{background:repeating-linear-gradient(135deg,#7D8EA7 0 3px,#A7B4C6 3px 7px)}
+.fr{background:repeating-linear-gradient(135deg,#A7B4C6 0 3px,#D2D9E3 3px 7px)}
+/* ov: quá tải, vạch đỏ ở mép trên */
+.ov::after{content:'';position:absolute;left:0;right:0;top:0;height:3px;background:#DC2626;z-index:2}
+/* abw: vắng cả tuần */
+.abw{background:repeating-linear-gradient(90deg,#F3F4F6 0 6px,#E5E7EB 6px 7px)}
+.abw span{color:#6B7280;font-weight:600;font-style:italic}
+@keyframes gr{from{transform:scaleY(0)}}
+/* Cột tổng bên phải: giờ còn trống, dòng đỏ nếu quá tải */
+.tot{text-align:right;padding-right:8px;line-height:1.15}
+.tot b{display:block;font-size:17px;color:#2563EB}
+.tot em{display:block;font-style:normal;font-size:12px;color:#DC2626;white-space:nowrap}
+.hd .tot{font-size:13px;color:#6B7280}
+/* Xem theo team: ít hàng nên mỗi hàng cao hơn (đổi 72px / 46px) */
+.mr.rt{height:72px}
+.rt .cb{height:46px}
+@keyframes pu{0%{box-shadow:0 0 0 0 rgba(220,38,38,.6)}70%{box-shadow:0 0 0 10px rgba(220,38,38,0)}100%{box-shadow:0 0 0 0 rgba(220,38,38,0)}}
+"
+VAR _css4 =
+"
+/* ===== 5. Thẻ Mức tải ===== */
+.big{font-size:76px;font-weight:600;line-height:84px;letter-spacing:-1px}
+.big small{font-size:38px;color:#6B7280;margin-left:4px}
+.pb{height:16px;background:#EEF1F5;border-radius:8px;overflow:hidden;margin:10px 0 12px}
+.pb i{display:block;height:100%;background:repeating-linear-gradient(135deg,#2563EB 0 4px,#60A5FA 4px 8px);transform-origin:left;animation:gx 1.2s ease-out both}
+@keyframes gx{from{transform:scaleX(0)}}
+.ln{font-size:15px;color:#4B5563;line-height:1.6}
+.ln b{color:#111827}
+.red{color:#DC2626;font-weight:600}
+
+/* ===== 6. Thẻ Top 5 dự án (thanh ngang) ===== */
+/* 150px: độ rộng tên dự án, 80px: độ rộng số giờ */
+.pjr{display:grid;grid-template-columns:150px minmax(0,1fr) 80px;align-items:center;gap:10px;height:38px;font-size:15px}
+.pjn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pjb{height:14px;background:#EEF1F5;border-radius:7px;overflow:hidden}
+.pjb i{display:block;height:100%;border-radius:7px;background:#94A3B8;transform-origin:left;animation:gx 1s ease-out both;transition:background .2s}
+.pjr:hover .pjb i{background:#2563EB}
+.pjv{text-align:right;font-weight:600}
+
+/* ===== 7. Thẻ Ai còn trống ===== */
+.fhd{display:flex;justify-content:space-between;font-size:13px;color:#6B7280;padding-bottom:6px;border-bottom:1px solid #E5E7EB}
+.frw{display:grid;grid-template-columns:36px minmax(0,1fr) auto;align-items:center;gap:10px;height:48px;border-bottom:1px solid #F1F3F6}
+.fp{border:1.5px solid #2563EB;color:#2563EB;border-radius:8px;padding:2px 10px;font-weight:700;font-size:15px;white-space:nowrap}
+"
+VAR _css5 =
+"
+/* ===== 8. Hàng mở rộng của người đang chọn ở slicer Person_Pick ===== */
+.rx{height:auto;align-items:end;padding:12px 0 14px;background:#FAFBFD}
+.rx:hover{background:#FAFBFD}
+.rx>.nm{align-self:start;flex-direction:column;align-items:flex-start;gap:8px}
+.xh{display:flex;align-items:center;gap:10px}
+.xh .av{width:46px;height:46px;font-size:15px}
+.xl2{font-size:13px;color:#6B7280}
+.xg{display:grid;grid-template-columns:14px minmax(0,1fr) auto;gap:3px 8px;align-items:center;font-size:13px;width:100%;padding-right:12px}
+.xg i{width:12px;height:12px;border-radius:3px}
+.xg em{font-style:normal;color:#6B7280}
+/* Mỗi tuần 1 cột chồng; 170px = 100% năng lực tuần (đổi ở VAR _xPx trong phần DAX) */
+.xc{position:relative;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;align-self:stretch;border-radius:8px;padding-top:6px}
+/* xo: tuần quá tải, nền hồng */
+.xo{background:#FDECEC}
+/* Đổi 12px: cỡ chữ % tổng trên đỉnh cột */
+.xt{font-size:12px;font-weight:700;margin-bottom:4px}
+.xs{display:flex;flex-direction:column-reverse;width:72%}
+/* Đoạn dự án trong cột; mọc dần khi mở trang. Đổi 11px: cỡ chữ % trong cột */
+.sg{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;font-style:normal;border-top:2px solid #fff;overflow:hidden;transform-origin:bottom;animation:gr .6s ease-out both}
+/* sfr: phần còn trống (gạch chéo xanh) */
+.sfr{background:repeating-linear-gradient(135deg,#93C5FD 0 3px,#E0EDFF 3px 7px)}
+/* xln: vạch đỏ ở mức 100% năng lực */
+.xln{position:absolute;left:4%;right:4%;height:2px;background:#DC2626}
+
+/* ===== 10. Bấm vào tên để mở / đóng hàng (checkbox ẩn, không cần JavaScript) ===== */
+.cbx{display:none}
+.pw>.rx{display:none}
+.cbx:checked~.rx{display:grid}
+.cbx:checked~.rn{display:none}
+.lk{cursor:pointer}
+.lk:hover b{color:#2563EB}
+/* Mũi tên cạnh tên: xoay xuống khi đang mở */
+.chv{margin-left:auto;margin-right:8px;font-style:normal;font-size:20px;color:#9CA3AF;transition:transform .2s}
+.rx .chv{transform:rotate(90deg);color:#2563EB}
+"
+VAR _css6 =
+"
+/* ===== 11. Nút Người | Team (radio ẩn, không cần JavaScript) ===== */
+.rv{display:none}
+.seg{display:inline-flex;background:#F3F4F6;border-radius:10px;padding:4px;gap:2px;margin-left:8px}
+.sgb{cursor:pointer;padding:6px 18px;border-radius:8px;font-size:16px;color:#6B7280}
+.sgb:hover{color:#111827}
+#vP:checked~.sum .sgp,#vT:checked~.sum .sgt{background:#fff;color:#111827;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+/* Đổi khung khi bấm: vwp = khung Người, vwt = khung Team; lgp / lgt = chú thích tương ứng */
+.vwt,.lgt{display:none}
+#vT:checked~.mx .vwp,#vT:checked~.sum .lgp{display:none}
+#vT:checked~.mx .vwt{display:block}
+#vT:checked~.sum .lgt{display:flex}
+/* Khung Team: ẩn số giờ dưới số tuần (đó là tổng mọi người, không theo team đang chọn) */
+#vT:checked~.mx .hd small{visibility:hidden}
+
+/* ===== 12. Khung Team: mỗi tuần 1 cột tổng (đã xếp / còn trống / quá tải) ===== */
+/* 520px: chiều cao vùng biểu đồ */
+.trw{display:grid;grid-template-columns:300px repeat(" & _nW & ",minmax(0,1fr)) 150px;column-gap:6px;height:520px;align-items:end;padding-top:8px}
+.tst{align-self:stretch;display:flex;flex-direction:column;padding:6px 0 0 6px}
+.tst small{font-size:14px;color:#6B7280}
+.tsb{display:block;font-size:36px;font-weight:600;color:#2563EB;line-height:1.1;margin-bottom:8px}
+.tsr{display:block;font-size:26px;font-weight:600;color:#DC2626;line-height:1.1;margin-bottom:12px}
+.tc{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;align-self:stretch}
+.tl{font-size:15px;font-weight:700;text-align:center;line-height:1.2;margin-bottom:4px}
+.tl em{display:block;font-style:normal;font-size:12px;color:#DC2626}
+/* 56%: độ rộng cột so với ô tuần */
+.tb{display:flex;flex-direction:column-reverse;width:56%}
+.tb i{display:block;transform-origin:bottom;animation:gr .7s ease-out both}
+.tg1{background:#A9B2C3}
+.tg2{background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#fff 2px 7px);border:1px solid #93C5FD;border-bottom:none}
+.tg3{background:#DC2626}
+"
+VAR _css7 =
+"
+/* ===== 13. Thẻ team (avatar + tên leader), bấm để chọn team ===== */
+.tks{margin-top:auto}
+.tk{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1.5px solid #E5E7EB;border-radius:12px;cursor:pointer;margin:0 10px 8px 0;transition:all .2s;background:#fff}
+.tk:hover{border-color:#93C5FD}
+.tk .nt b{font-size:15px}
+/* Khối số liệu, cột biểu đồ, bảng thành viên: chỉ hiện của team đang chọn */
+.ts{display:none}
+.tw{display:none}
+.tm{display:none}
+
+/* ===== 14. Bảng thành viên dưới biểu đồ ===== */
+.tmm{margin-top:18px;border-top:1px solid #E5E7EB;padding-top:14px}
+.mtt{font-size:18px;font-weight:600;margin-bottom:6px}
+/* Độ rộng các cột: tên | năng lực | thanh tải | trống | quá tải */
+.mtr{display:grid;grid-template-columns:minmax(0,1.6fr) 140px minmax(0,2fr) 120px 120px;align-items:center;gap:14px;height:52px;border-bottom:1px solid #F1F3F6;font-size:15px}
+.mth{height:34px;font-size:13px;color:#6B7280;border-bottom:1px solid #E5E7EB}
+.mnm{display:flex;align-items:center;gap:10px;min-width:0}
+.ldb{font-size:11px;font-weight:700;color:#2563EB;background:#EFF6FF;border-radius:6px;padding:1px 6px;margin-left:6px}
+.mbar{display:flex;align-items:center;gap:10px}
+.mbar>span{flex:1;height:12px;background:#EEF1F5;border-radius:6px;overflow:hidden}
+.mbar i{display:block;height:100%;border-radius:6px;transform-origin:left;animation:gx 1s ease-out both}
+.mbar b{width:52px;text-align:right}
+.mfr{color:#2563EB;font-weight:600;text-align:right}
+.mov{color:#DC2626;font-weight:600;text-align:right}
+"
+VAR _css8 =
+"
+/* ===== 15. Đổi theo team đang chọn (t0 = tất cả, t1.. = từng team; tối đa 8) ===== */
+#t0:checked~.trw .tw0,#t1:checked~.trw .tw1,#t2:checked~.trw .tw2,#t3:checked~.trw .tw3,#t4:checked~.trw .tw4,#t5:checked~.trw .tw5,#t6:checked~.trw .tw6,#t7:checked~.trw .tw7{display:contents}
+#t0:checked~.trw .ts0,#t1:checked~.trw .ts1,#t2:checked~.trw .ts2,#t3:checked~.trw .ts3,#t4:checked~.trw .ts4,#t5:checked~.trw .ts5,#t6:checked~.trw .ts6,#t7:checked~.trw .ts7{display:block}
+#t0:checked~.trw .tk0,#t1:checked~.trw .tk1,#t2:checked~.trw .tk2,#t3:checked~.trw .tk3,#t4:checked~.trw .tk4,#t5:checked~.trw .tk5,#t6:checked~.trw .tk6,#t7:checked~.trw .tk7{border-color:#2563EB;background:#EFF6FF}
+#kM:checked~.mx #t0:checked~.trw .tq0,#kM:checked~.mx #t1:checked~.trw .tq1,#kM:checked~.mx #t2:checked~.trw .tq2,#kM:checked~.mx #t3:checked~.trw .tq3,#kM:checked~.mx #t4:checked~.trw .tq4,#kM:checked~.mx #t5:checked~.trw .tq5,#kM:checked~.mx #t6:checked~.trw .tq6,#kM:checked~.mx #t7:checked~.trw .tq7{display:contents}
+#t0:checked~.tmm .tm0,#t1:checked~.tmm .tm1,#t2:checked~.tmm .tm2,#t3:checked~.tmm .tm3,#t4:checked~.tmm .tm4,#t5:checked~.tmm .tm5,#t6:checked~.tmm .tm6,#t7:checked~.tmm .tm7{display:block}
+"
+VAR _css9 =
+"
+/* ===== 16. Hàng 2 của thanh tóm tắt: chú thích ===== */
+.sl2{flex-basis:100%;display:flex;align-items:center;gap:16px}
+
+/* ===== 16b. Nút Tuần | Tháng ===== */
+/* whd = tiêu đề theo tuần, mhd = tiêu đề theo tháng; vwm = thân bảng tháng (khung Người) */
+.vwm{display:none}
+.mhd{display:none}
+#kM:checked~.mx>.mhd{display:grid}
+#kM:checked~.mx>.whd{display:none}
+#kM:checked~.mx .vwm{display:block}
+#kM:checked~.mx .vwp{display:none}
+#kM:checked~.sum .lgp{display:none}
+#kM:checked~.sum .lgt{display:flex}
+#vT:checked~.mx .vwm{display:none}
+/* Khung Team theo tháng: ẩn cột tuần (tw), hiện cột tháng (tq) */
+.tq{display:none}
+#kM:checked~.mx .trw .tw{display:none}
+.tbm{display:flex;flex-direction:column-reverse;width:60%;max-width:200px}
+.tbm i{display:block;transform-origin:bottom;animation:gr .7s ease-out both}
+#kW:checked~.sum .skw,#kM:checked~.sum .skm{background:#fff;color:#111827;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+
+/* ===== 17. Ô theo tháng: cao = giờ có mặt mỗi tuần (40 h = 40px), trong chia đã xếp / trống / quá tải ===== */
+.mcl{align-self:stretch;display:flex;align-items:flex-end;padding-bottom:3px}
+.mcb{position:relative;width:100%;display:flex;flex-direction:column;border-radius:4px;overflow:hidden;background:#EEF1F5}
+.mcb i{display:block;flex:none;transform-origin:bottom;animation:gr .7s ease-out both}
+.mg1{background:#A9B2C3}
+.mg2{background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#fff 2px 7px)}
+.mg3{background:#DC2626}
+.mcb span{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-size:12px;font-weight:700;color:#1F2937;text-shadow:0 0 3px #fff,0 0 3px #fff}
+"
+VAR _css10 =
+"
+/* ===== 18. Mũi tên ‹ › đổi tuần: bảng dịch ngang, cột tên và cột tổng đứng yên ===== */
+/* --off = số tuần đang lùi lại (0 = bắt đầu từ tuần hiện tại); --np, --wk đặt ở thẻ style cuối */
+.mx{container-type:inline-size;overflow:hidden;--off:0;--tx:calc((var(--np) - var(--off)) * (var(--wk) + 6px))}
+.mx>div{width:max-content;min-width:100%;transform:translateX(calc(-1 * var(--tx)));transition:transform .4s ease}
+/* Cột tên, khối số liệu team, bảng thành viên: dịch ngược lại để đứng yên */
+.mr>.nm,.tst,.tmm{position:relative;z-index:4;transform:translateX(var(--tx));transition:transform .4s ease}
+/* box-shadow: che sợi mảnh của ô tuần lộ ra ở mép */
+.mr>.nm{background:#fff;align-self:stretch;box-shadow:-14px 0 0 #fff}
+.rg>.nm{background:#F9FAFB;box-shadow:-14px 0 0 #F9FAFB}
+.rx>.nm{background:#FAFBFD;box-shadow:-14px 0 0 #FAFBFD}
+.tst{background:#fff}
+.tmm{width:100cqw}
+/* Cột tổng bên phải: đứng yên khi lùi tuần */
+.mx .tot{position:relative;z-index:4;background:#fff;align-self:stretch;display:flex;flex-direction:column;justify-content:center;box-shadow:14px 0 0 #fff;transform:translateX(calc(-1 * var(--off) * (var(--wk) + 6px)));transition:transform .4s ease}
+.rg>.tot{background:#F9FAFB;box-shadow:14px 0 0 #F9FAFB}
+.rx>.tot{background:#FAFBFD;box-shadow:14px 0 0 #FAFBFD}
+/* Rê chuột vào hàng: cột tên và cột tổng sáng lên cùng cả hàng */
+.mr:not(.hd):not(.rx):hover>.nm{background:#F8FAFC;box-shadow:-14px 0 0 #F8FAFC}
+.mr:not(.hd):not(.rx):hover>.tot{background:#F8FAFC;box-shadow:14px 0 0 #F8FAFC}
+.trw .tot{justify-content:flex-end}
+/* Mũi tên: chỉ hiện cặp của vị trí đang chọn */
+.arw{display:none;width:30px;height:30px;border-radius:50%;align-items:center;justify-content:center;font-size:24px;line-height:1;color:#374151;cursor:pointer;margin-left:auto;user-select:none}
+.arw:hover{background:#EFF6FF;color:#2563EB}
+.arw.dis{color:#D1D5DB;cursor:default;background:none}
+.hd .tot .arw{margin:0 0 4px auto}
+/* Tooltip: 3 hàng đầu hiện phía dưới, cột cao hiện bên trong, để không bị khung cắt */
+.tdn .tip{bottom:auto;top:calc(100% + 6px)}
+.xc>.tip,.tc>.tip{bottom:auto;top:30px}
+"
+VAR _css11 =
+"
+/* ===== 19. Chi tiết 1 tuần (bấm số tuần ở hàng tiêu đề) ===== */
+/* Mỗi số tuần có 2 nhãn: wl1 = mở chi tiết, wl0 = quay lại bảng (chỉ hiện khi đang xem tuần đó) */
+.whd .wh label{display:block;cursor:pointer}
+.whd .wh label:hover b{background:#EFF6FF;color:#2563EB}
+.whd .wh .wl0{display:none}
+.wdb{display:none}
+.mx>.wdb{transform:none;width:100cqw;padding-top:6px}
+.wdh{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
+.wdh em{font-style:normal;font-size:14px}
+.wbk{margin-left:auto;background:#F3F4F6;font-weight:600;color:#111827}
+/* Cột: tên | đã xếp (trái trục) | trục | còn trống / quá tải (phải trục) */
+.wrw{display:grid;grid-template-columns:300px minmax(0,1fr) 2px minmax(0,1.25fr);align-items:center;height:42px}
+.wlb{height:28px}
+.wlb span{font-size:13px;color:#6B7280;padding:0 10px}
+.wl{display:flex;justify-content:flex-end;padding-left:20px}
+.wr{display:flex;align-items:center;gap:10px;padding-right:20px}
+.wax{display:block;align-self:stretch;background:#9CA3AF}
+/* Đổi 18px: độ dày thanh */
+.wpl{display:block;height:18px;background:#A9B2C3;border-radius:4px 0 0 4px;transform-origin:right;animation:gx .6s ease-out both}
+.wfr{display:block;flex:none;height:18px;background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#fff 2px 6px);border:1px solid #93C5FD;transform-origin:left;animation:gx .6s ease-out both}
+.wov{display:block;flex:none;height:18px;background:#F19C9C;transform-origin:left;animation:gx .6s ease-out both}
+/* w3: quá tải từ 3 tuần liên tiếp, đỏ đậm */
+.w3{background:#DC2626}
+.wab{display:block;flex:1;height:18px;line-height:18px;background:#E5E7EB;font-style:normal;font-size:13px;color:#6B7280;padding-left:8px}
+.wlf{color:#2563EB;font-weight:700}
+.wlo{color:#DC2626;font-weight:700;white-space:nowrap}
+.wlv{color:#6B7280;margin-left:8px}
+/* ===== 20. Chi tiết 1 tháng (bấm tên tháng ở khung Tháng) ===== */
+.mhd .wh label{display:block;cursor:pointer}
+.mhd .wh label:hover b{background:#EFF6FF;color:#2563EB}
+.mhd .wh .ml0{display:none}
+.mhd .wh b{display:inline-block;padding:2px 10px;border-radius:999px}
+.mdb{display:none}
+.mx>.mdb{transform:none;width:100cqw;padding-top:6px}
+"
+VAR _css12 =
+"
+/* ===== 21. Nút Nền tối / Nền sáng (checkbox ẩn #dk, bao cả trang trong .dkw) ===== */
+.dkw{border-radius:16px;transition:background .3s}
+.dkb{flex:none;cursor:pointer;padding:8px 16px;border-radius:999px;border:1px solid #E5E7EB;background:#F9FAFB;font-size:15px;font-weight:600;color:#374151;white-space:nowrap;user-select:none}
+.dkb:hover{border-color:#93C5FD;color:#2563EB}
+.dk2{display:none}
+"
+VAR _css = "<style>" & _css1 & _css2 & _css3 & _css4 & _css5 & _css6 & _css7 & _css8 & _css9 & _css10 & _css11 & _css12 & "</style>"
+// ---------- Bảng màu nền tối: tạo từ CSS ở trên (nền sáng → nền tối, chữ tối → chữ sáng); đặt ở cuối trang để đè các luật khác ----------
+VAR _dk1 =
+"
+#dk:checked~.dkw{background:#0B1220;color:#E5E7EB}
+#dk:checked~.dkw .pnl{box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#dk:checked~.dkw .whd .cw b{color:#E5E7EB}
+#dk:checked~.dkw .wh b,#dk:checked~.dkw .nt b,#dk:checked~.dkw .kw,#dk:checked~.dkw .ttl,#dk:checked~.dkw h3,#dk:checked~.dkw .big,#dk:checked~.dkw .pjv,#dk:checked~.dkw .mtt{color:#F3F4F6}
+#dk:checked~.dkw .tg2,#dk:checked~.dkw .mg2,#dk:checked~.dkw .wfr{background:repeating-linear-gradient(135deg,#60A5FA 0 2px,#111827 2px 7px)}
+#dk:checked~.dkw .dk1{display:none}
+#dk:checked~.dkw .fu{background:repeating-linear-gradient(135deg,#64748B 0 3px,#475569 3px 7px)}
+#dk:checked~.dkw .fr{background:repeating-linear-gradient(135deg,#475569 0 3px,#334155 3px 7px)}
+#dk:checked~.dkw .lgd .fu{background:repeating-linear-gradient(135deg,#64748B 0 3px,#475569 3px 7px)}
+#dk:checked~.dkw .cb span,#dk:checked~.dkw .mcb span{color:#F9FAFB;text-shadow:0 0 3px #0B1220,0 0 3px #0B1220}
+#dk:checked~.dkw .tg1,#dk:checked~.dkw .mg1,#dk:checked~.dkw .wpl{background:#64748B}
+#dk:checked~.dkw .dk2{display:inline}
+#dk:checked~.dkw .pg{color:#E5E7EB}
+#dk:checked~.dkw .pnl{background:#111827;border:1px solid #374151}
+#dk:checked~.dkw .sub{color:#9CA3AF}
+#dk:checked~.dkw .slot{background:#0F172A}
+#dk:checked~.dkw .kw small{color:#9CA3AF}
+#dk:checked~.dkw .cnt{color:#D1D5DB;background:#1F2937}
+#dk:checked~.dkw .cnt b{color:#F3F4F6}
+#dk:checked~.dkw .sq4{background:#4B5563}
+#dk:checked~.dkw .lgd{color:#9CA3AF}
+#dk:checked~.dkw .mr{border-bottom:1px solid #1F2937}
+#dk:checked~.dkw .mr:hover{background:#1E293B}
+#dk:checked~.dkw .hd{border-bottom:1px solid #374151}
+#dk:checked~.dkw .rg{background:#0F172A}
+#dk:checked~.dkw .nt small{color:#9CA3AF}
+#dk:checked~.dkw .av{border:2px solid #111827}
+#dk:checked~.dkw .wh small{color:#9CA3AF}
+#dk:checked~.dkw .ce.cw{background:#172554}
+#dk:checked~.dkw .cb{background:#1F2937}
+#dk:checked~.dkw .cb span{color:#E5E7EB;text-shadow:0 0 3px #111827,0 0 3px #111827}
+#dk:checked~.dkw .fr{background:repeating-linear-gradient(135deg,#A7B4C6 0 3px,#334155 3px 7px)}
+#dk:checked~.dkw .abw{background:repeating-linear-gradient(90deg,#1F2937 0 6px,#374151 6px 7px)}
+#dk:checked~.dkw .abw span{color:#9CA3AF}
+#dk:checked~.dkw .hd .tot{color:#9CA3AF}
+#dk:checked~.dkw .big small{color:#9CA3AF}
+"
+VAR _dk2 =
+"
+#dk:checked~.dkw .pb{background:#1F2937}
+#dk:checked~.dkw .ln{color:#9CA3AF}
+#dk:checked~.dkw .ln b{color:#F3F4F6}
+#dk:checked~.dkw .pjb{background:#1F2937}
+#dk:checked~.dkw .fhd{color:#9CA3AF;border-bottom:1px solid #374151}
+#dk:checked~.dkw .frw{border-bottom:1px solid #1F2937}
+#dk:checked~.dkw .rx{background:#0F172A}
+#dk:checked~.dkw .rx:hover{background:#0F172A}
+#dk:checked~.dkw .xl2{color:#9CA3AF}
+#dk:checked~.dkw .xg em{color:#9CA3AF}
+#dk:checked~.dkw .xo{background:#3B1D1D}
+#dk:checked~.dkw .sg{border-top:2px solid #111827}
+#dk:checked~.dkw .sfr{background:repeating-linear-gradient(135deg,#93C5FD 0 3px,#1E3A5F 3px 7px)}
+#dk:checked~.dkw .seg{background:#1F2937}
+#dk:checked~.dkw .sgb{color:#9CA3AF}
+#dk:checked~.dkw .sgb:hover{color:#F3F4F6}
+#dk:checked~.dkw #vP:checked~.sum .sgp,#dk:checked~.dkw #vT:checked~.sum .sgt{background:#111827;color:#F3F4F6}
+#dk:checked~.dkw .tst small{color:#9CA3AF}
+#dk:checked~.dkw .tg2{background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#111827 2px 7px)}
+#dk:checked~.dkw .tk{border:1.5px solid #374151;background:#111827}
+#dk:checked~.dkw .tmm{border-top:1px solid #374151}
+#dk:checked~.dkw .mtr{border-bottom:1px solid #1F2937}
+#dk:checked~.dkw .mth{color:#9CA3AF;border-bottom:1px solid #374151}
+#dk:checked~.dkw .ldb{background:#1E3A8A}
+#dk:checked~.dkw .mbar>span{background:#1F2937}
+#dk:checked~.dkw #t0:checked~.trw .tk0,#dk:checked~.dkw #t1:checked~.trw .tk1,#dk:checked~.dkw #t2:checked~.trw .tk2,#dk:checked~.dkw #t3:checked~.trw .tk3,#dk:checked~.dkw #t4:checked~.trw .tk4,#dk:checked~.dkw #t5:checked~.trw .tk5,#dk:checked~.dkw #t6:checked~.trw .tk6,#dk:checked~.dkw #t7:checked~.trw .tk7{background:#1E3A8A}
+#dk:checked~.dkw #kW:checked~.sum .skw,#dk:checked~.dkw #kM:checked~.sum .skm{background:#111827;color:#F3F4F6}
+#dk:checked~.dkw .mcb{background:#1F2937}
+#dk:checked~.dkw .mg2{background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#111827 2px 7px)}
+#dk:checked~.dkw .mcb span{color:#E5E7EB;text-shadow:0 0 3px #111827,0 0 3px #111827}
+#dk:checked~.dkw .mr>.nm{background:#111827;box-shadow:-14px 0 0 #111827}
+#dk:checked~.dkw .rg>.nm{background:#0F172A;box-shadow:-14px 0 0 #0F172A}
+#dk:checked~.dkw .rx>.nm{background:#0F172A;box-shadow:-14px 0 0 #0F172A}
+#dk:checked~.dkw .tst{background:#111827}
+"
+VAR _dk3 =
+"
+#dk:checked~.dkw .mx .tot{background:#111827;box-shadow:14px 0 0 #111827}
+#dk:checked~.dkw .rg>.tot{background:#0F172A;box-shadow:14px 0 0 #0F172A}
+#dk:checked~.dkw .rx>.tot{background:#0F172A;box-shadow:14px 0 0 #0F172A}
+#dk:checked~.dkw .mr:not(.hd):not(.rx):hover>.nm{background:#1E293B;box-shadow:-14px 0 0 #1E293B}
+#dk:checked~.dkw .mr:not(.hd):not(.rx):hover>.tot{background:#1E293B;box-shadow:14px 0 0 #1E293B}
+#dk:checked~.dkw .arw{color:#D1D5DB}
+#dk:checked~.dkw .arw:hover{background:#1E3A8A}
+#dk:checked~.dkw .whd .wh label:hover b{background:#1E3A8A}
+#dk:checked~.dkw .wbk{background:#1F2937;color:#F3F4F6}
+#dk:checked~.dkw .wlb span{color:#9CA3AF}
+#dk:checked~.dkw .wfr{background:repeating-linear-gradient(135deg,#3B82F6 0 2px,#111827 2px 6px)}
+#dk:checked~.dkw .wab{background:#374151;color:#9CA3AF}
+#dk:checked~.dkw .wlv{color:#9CA3AF}
+#dk:checked~.dkw .mhd .wh label:hover b{background:#1E3A8A}
+#dk:checked~.dkw .dkb{border:1px solid #374151;background:#0F172A;color:#D1D5DB}
+"
+VAR _cssDark = "<style>" & _dk1 & _dk2 & _dk3 & "</style>"
+
+// ---------- B. Dữ liệu dùng chung (mỗi số chỉ tính 1 lần) ----------
+// Nút Người | Team nay nằm trong HTML (bấm trực tiếp), không còn dùng slicer View_Selector
+VAR _view = "Personen"
+VAR _cur = [Cur Week Start]
+// Khung dữ liệu: _nPast tuần trước + _nW tuần từ tuần hiện tại (cắt theo phạm vi dữ liệu đang có)
+VAR _ws = _cur - 7 * _nPast
+VAR _end = _cur + 7 * _nW
+
+// Bảng tuần trong cửa sổ, @r là thứ tự cột
+VAR _wk0 =
+    CALCULATETABLE (
+        SUMMARIZE ( dim_date, dim_date[Week_Start], dim_date[KW] ),
+        REMOVEFILTERS ( dim_date ),
+        dim_date[Week_Start] >= _ws,
+        dim_date[Week_Start] < _end
+    )
+VAR _wk = ADDCOLUMNS ( _wk0, "@r", RANKX ( _wk0, dim_date[Week_Start], , ASC ) )
+// Vị trí tuần hiện tại trong cửa sổ (trống nếu đang xem tuần khác); tô nền xanh nhạt cột này
+VAR _curR = MAXX ( FILTER ( _wk, dim_date[Week_Start] = _cur ), [@r] )
+// Tổng số cột tuần (quá khứ + tương lai)
+VAR _nC = COUNTROWS ( _wk ) + 0
+// Số tuần quá khứ thật sự có dữ liệu; các vị trí lùi tuần 0.._np
+VAR _np = MAX ( 0, COALESCE ( _curR, 1 ) - 1 )
+VAR _pos = GENERATESERIES ( 0, _np, 1 )
+// Mũi tên ‹ (lùi 1 tuần) và › (tiến 1 tuần): mỗi vị trí một cặp, CSS chỉ hiện cặp đang dùng
+VAR _arL =
+    CONCATENATEX (
+        _pos,
+        IF (
+            [Value] < _np,
+            "<label for='p" & [Value] + 1 & "' class='arw al" & [Value] & "'>‹</label>",
+            "<span class='arw al" & [Value] & " dis'>‹</span>"
+        ),
+        "", [Value], ASC
+    )
+VAR _arR =
+    CONCATENATEX (
+        _pos,
+        IF (
+            [Value] > 0,
+            "<label for='p" & [Value] - 1 & "' class='arw ar" & [Value] & "'>›</label>",
+            "<span class='arw ar" & [Value] & " dis'>›</span>"
+        ),
+        "", [Value], ASC
+    )
+
+// Bảng người (theo slicer Vai trò, Địa điểm)
+VAR _ppl =
+    ADDCOLUMNS (
+        SUMMARIZE ( dim_person, dim_person[Person_ID], dim_person[Name], dim_person[Role], dim_person[Weekly_Capacity], dim_person[Standort], dim_team[Team_ID], dim_team[Team] ),
+        "@ini", LEFT ( dim_person[Name], 1 ) & MID ( dim_person[Name], SEARCH ( " ", dim_person[Name], 1, 0 ) + 1, 1 ),
+        "@ro", SWITCH ( dim_person[Role], "PM", 1, "PO", 2, 3 )
+    )
+
+// Lõi: người × tuần, giờ đã xếp / giờ có mặt / năng lực (1 truy vấn cho cả ma trận)
+VAR _cell =
+    CALCULATETABLE (
+        ADDCOLUMNS ( CROSSJOIN ( _ppl, _wk ), "@pl", [Planned h], "@av", [Available h], "@cap", [Capacity h] ),
+        REMOVEFILTERS ( dim_date )
+    )
+// @fh: giờ còn trống, @oh: giờ quá tải (tính theo từng người × tuần)
+VAR _cellX =
+    ADDCOLUMNS ( _cell, "@fh", MAX ( 0, [@av] - [@pl] ), "@oh", MAX ( 0, [@pl] - [@av] ) )
+
+// Gom về một bảng chung: ô của người (P), nhóm vai trò (R), team (T)
+VAR _uP =
+    SELECTCOLUMNS (
+        _cellX,
+        "@key", "P|" & dim_person[Person_ID], "@nm", dim_person[Name], "@r", [@r], "@kw", dim_date[KW],
+        "@pl", [@pl] + 0, "@av", [@av] + 0, "@cap", [@cap] + 0, "@fh", [@fh] + 0, "@oh", [@oh] + 0, "@n", 1
+    )
+VAR _gR =
+    GROUPBY (
+        _cellX, dim_person[Role], dim_date[Week_Start], dim_date[KW],
+        "@gr", MAXX ( CURRENTGROUP (), [@r] ), "@gpl", SUMX ( CURRENTGROUP (), [@pl] ), "@gav", SUMX ( CURRENTGROUP (), [@av] ),
+        "@gcap", SUMX ( CURRENTGROUP (), [@cap] ), "@gfh", SUMX ( CURRENTGROUP (), [@fh] ), "@goh", SUMX ( CURRENTGROUP (), [@oh] ),
+        "@gn", COUNTX ( CURRENTGROUP (), [@r] )
+    )
+VAR _uR =
+    SELECTCOLUMNS (
+        _gR,
+        "@key", "R|" & dim_person[Role], "@nm", dim_person[Role], "@r", [@gr], "@kw", dim_date[KW],
+        "@pl", [@gpl] + 0, "@av", [@gav] + 0, "@cap", [@gcap] + 0, "@fh", [@gfh] + 0, "@oh", [@goh] + 0, "@n", [@gn]
+    )
+VAR _gT =
+    GROUPBY (
+        _cellX, dim_team[Team], dim_date[Week_Start], dim_date[KW],
+        "@gr", MAXX ( CURRENTGROUP (), [@r] ), "@gpl", SUMX ( CURRENTGROUP (), [@pl] ), "@gav", SUMX ( CURRENTGROUP (), [@av] ),
+        "@gcap", SUMX ( CURRENTGROUP (), [@cap] ), "@gfh", SUMX ( CURRENTGROUP (), [@fh] ), "@goh", SUMX ( CURRENTGROUP (), [@oh] ),
+        "@gn", COUNTX ( CURRENTGROUP (), [@r] )
+    )
+VAR _uT =
+    SELECTCOLUMNS (
+        _gT,
+        "@key", "T|" & dim_team[Team], "@nm", dim_team[Team], "@r", [@gr], "@kw", dim_date[KW],
+        "@pl", [@gpl] + 0, "@av", [@gav] + 0, "@cap", [@gcap] + 0, "@fh", [@gfh] + 0, "@oh", [@goh] + 0, "@n", [@gn]
+    )
+VAR _u = UNION ( _uP, _uR, _uT )
+
+// ---------- C. HTML của từng ô (tính 1 lần cho mọi hàng) ----------
+VAR _uH =
+    ADDCOLUMNS (
+        _u,
+        "@h",
+            VAR u = COALESCE ( DIVIDE ( [@pl], [@av] ), 0 )
+            VAR ab = [@cap] > 0 && [@av] = 0
+            RETURN
+                "<div class='ce tt" & IF ( [@r] = _curR, " cw", "" ) & "'><div class='cb" & IF ( ab, " abw", "" ) & IF ( [@oh] > 0, " ov", "" ) & "'>"
+                & IF (
+                    ab,
+                    "<span>vắng</span>",
+                    "<i class='fl " & IF ( u >= 0.9, "fu", "fr" ) & "' style='height:" & FORMAT ( MIN ( u, 1 ) * 100, "0", "en-US" )
+                        & "%;animation-delay:" & FORMAT ( [@r] * 0.04, "0.00", "en-US" ) & "s'></i><span>"
+                        & IF ( [@pl] > 0, FORMAT ( u, "0%", "en-US" ), "" ) & "</span>"
+                  )
+                // Tooltip của ô
+                & "</div><span class='tip" & IF ( [@r] > _nC - 3, " r", "" ) & "'><b>" & [@nm] & " · Tuần " & [@kw] & "</b>"
+                & IF ( [@n] > 1, " (" & [@n] & " người)", "" )
+                & "<br>Đã xếp: " & FORMAT ( [@pl], "#,0", "en-US" ) & " h<br>Có mặt: " & FORMAT ( [@av], "#,0", "en-US" ) & " h"
+                & IF ( ab, "<br>Vắng cả tuần", "<br>Tải: " & FORMAT ( u, "0%", "en-US" ) & "<br>Còn trống: " & FORMAT ( [@fh], "#,0", "en-US" ) & " h" )
+                & IF ( [@oh] > 0, "<br><em>Quá tải: +" & FORMAT ( [@oh], "#,0", "en-US" ) & " h</em>", "" )
+                & "</span></div>"
+    )
+
+// ---------- D. Danh sách hàng của ma trận ----------
+VAR _rP =
+    SELECTCOLUMNS (
+        _ppl,
+        "@key", "P|" & dim_person[Person_ID],
+        "@kind", "rp",
+        "@ord",
+            VAR r = dim_person[Role]
+            VAR n = dim_person[Name]
+            RETURN [@ro] * 100 + COUNTROWS ( FILTER ( _ppl, dim_person[Role] = r && dim_person[Name] < n ) ) + 1,
+        "@nm", dim_person[Name],
+        "@sub", dim_person[Weekly_Capacity] & " h · " & dim_team[Team],
+        "@avt", "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>"
+    )
+VAR _rG =
+    SELECTCOLUMNS (
+        GROUPBY ( _ppl, dim_person[Role], "@o", MAXX ( CURRENTGROUP (), [@ro] ), "@c", COUNTX ( CURRENTGROUP (), [@ro] ) ),
+        "@key", "R|" & dim_person[Role],
+        "@kind", "rg",
+        "@ord", [@o] * 100,
+        "@nm", dim_person[Role],
+        "@sub", [@c] & " người",
+        "@avt",
+            VAR r = dim_person[Role]
+            RETURN
+                "<span class='avs'>"
+                & CONCATENATEX (
+                    TOPN ( 3, FILTER ( _ppl, dim_person[Role] = r ), dim_person[Name], ASC ),
+                    "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>", "", dim_person[Name], ASC
+                  )
+                & "</span>"
+    )
+VAR _rT =
+    SELECTCOLUMNS (
+        GROUPBY ( _ppl, dim_team[Team_ID], dim_team[Team], "@c", COUNTX ( CURRENTGROUP (), [@ro] ) ),
+        "@key", "T|" & dim_team[Team],
+        "@kind", "rt",
+        "@ord", VALUE ( RIGHT ( dim_team[Team_ID], 3 ) ),
+        "@nm", dim_team[Team],
+        "@sub", [@c] & " người",
+        "@avt", "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & MID ( dim_team[Team], 6, 1 ) & "</i>"
+    )
+// Xem theo người: nhóm vai trò + từng người; xem theo team: từng team
+VAR _rows =
+    FILTER ( UNION ( _rP, _rG, _rT ), IF ( _view = "Team", [@kind] = "rt", [@kind] <> "rt" ) )
+
+// ---------- D2. Hàng mở rộng: tính sẵn cho mọi người đang hiện; bấm vào tên để mở / đóng ----------
+// Slicer Person_Pick (bảng rời, không nối quan hệ) chỉ dùng để mở sẵn vài người khi vào trang; không chọn thì tất cả đóng
+VAR _picks = FILTER ( VALUES ( Person_Pick[Name] ), ISFILTERED ( Person_Pick[Name] ) )
+VAR _openIds = CALCULATETABLE ( VALUES ( dim_person[Person_ID] ), REMOVEFILTERS ( dim_person ), TREATAS ( _picks, dim_person[Name] ) )
+VAR _openKeys = SELECTCOLUMNS ( _openIds, "@ok", "P|" & dim_person[Person_ID] )
+VAR _pickIds = VALUES ( dim_person[Person_ID] )
+VAR _pickKeys = SELECTCOLUMNS ( _pickIds, "@pk", "P|" & dim_person[Person_ID] )
+// Số px cho 100% năng lực tuần (cột chồng cao hơn hoặc thấp hơn)
+VAR _xPx = 170
+// Giờ theo người × dự án × tuần của mọi người đang hiện (1 truy vấn)
+VAR _pjw =
+    CALCULATETABLE (
+        ADDCOLUMNS ( CROSSJOIN ( _pickIds, SUMMARIZE ( dim_project, dim_project[Project_ID], dim_project[Project] ), _wk ), "@h", [Planned h] ),
+        REMOVEFILTERS ( dim_date )
+    )
+VAR _pjw2 = FILTER ( _pjw, [@h] > 0 )
+VAR _pjt = GROUPBY ( _pjw2, dim_person[Person_ID], dim_project[Project_ID], dim_project[Project], "@t", SUMX ( CURRENTGROUP (), [@h] ) )
+// Màu dự án theo từng người: dự án nhiều giờ nhất đậm nhất, nằm dưới cùng
+VAR _pjtR =
+    ADDCOLUMNS (
+        ADDCOLUMNS (
+            _pjt,
+            "@k",
+                VAR vPer = dim_person[Person_ID]
+                VAR vT = [@t] + VALUE ( RIGHT ( dim_project[Project_ID], 3 ) ) / 1000
+                RETURN COUNTROWS ( FILTER ( _pjt, dim_person[Person_ID] = vPer && [@t] + VALUE ( RIGHT ( dim_project[Project_ID], 3 ) ) / 1000 > vT ) ) + 1
+        ),
+        "@col", SWITCH ( [@k], 1, "#3F4654", 2, "#5F6778", 3, "#8A93A6", 4, "#AEB6C6", 5, "#C9CFDB", "#DDE1E8" ),
+        "@tc", IF ( [@k] <= 3, "#fff", "#1F2937" )
+    )
+VAR _pjwK =
+    ADDCOLUMNS (
+        _pjw2,
+        "@k",
+            VAR vPer = dim_person[Person_ID]
+            VAR vPid = dim_project[Project_ID]
+            RETURN MAXX ( FILTER ( _pjtR, dim_person[Person_ID] = vPer && dim_project[Project_ID] = vPid ), [@k] )
+    )
+// HTML hàng mở rộng cho từng người (ẩn sẵn, hiện khi bấm vào tên)
+VAR _xRows =
+    ADDCOLUMNS (
+        _pickKeys,
+        "@xh",
+            VAR xKey = [@pk]
+            VAR xId = MID ( xKey, 3, 50 )
+            VAR xW = FILTER ( _uP, [@key] = xKey )
+            VAR xInfo = FILTER ( _ppl, dim_person[Person_ID] = xId )
+            VAR xPj = FILTER ( _pjtR, dim_person[Person_ID] = xId )
+            VAR xPjw = FILTER ( _pjwK, dim_person[Person_ID] = xId )
+            // Cột tổng: chỉ tính từ tuần hiện tại trở đi
+            VAR xWf = FILTER ( xW, [@r] >= _curR )
+            VAR xFh = SUMX ( xWf, [@fh] )
+            VAR xOh = SUMX ( xWf, [@oh] )
+            VAR xNov = COUNTROWS ( FILTER ( xWf, [@oh] > 0 ) ) + 0
+            RETURN
+        "<div class='mr rp rx'><label for='c" & xId & "' class='nm lk'><div class='xh'>"
+        & CONCATENATEX ( xInfo, "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i><div class='nt'><b>" & dim_person[Name] & "</b><small>" & dim_person[Role] & " · " & dim_person[Weekly_Capacity] & " h · " & dim_team[Team] & "</small></div>" )
+        & "<i class='chv'>›</i></div><div class='xl2'>% năng lực tuần · " & COUNTROWS ( xPj ) + 0 & " dự án</div><div class='xg'>"
+        // Chú thích: 5 dự án nhiều giờ nhất, phần còn lại gộp thành "Khác" (để hàng không cao hơn cột chồng)
+        & CONCATENATEX ( FILTER ( xPj, [@k] <= 5 ), "<i style='background:" & [@col] & "'></i><span>" & dim_project[Project] & "</span><em>" & FORMAT ( [@t], "#,0", "en-US" ) & " h</em>", "", [@k], ASC )
+        & IF (
+            COUNTROWS ( FILTER ( xPj, [@k] > 5 ) ) > 0,
+            "<i style='background:#DDE1E8'></i><span>Khác (" & COUNTROWS ( FILTER ( xPj, [@k] > 5 ) ) & " dự án)</span><em>"
+                & FORMAT ( SUMX ( FILTER ( xPj, [@k] > 5 ), [@t] ), "#,0", "en-US" ) & " h</em>",
+            ""
+          )
+        & "<i class='sfr'></i><span style='color:#2563EB'>Còn trống</span><em style='color:#2563EB'>" & FORMAT ( xFh, "#,0", "en-US" ) & " h</em></div>"
+        & "<div class='xl2'>" & CONCATENATEX ( xInfo, dim_person[Standort] ) & "</div></label>"
+        // Mỗi tuần một cột chồng theo dự án
+        & CONCATENATEX (
+            xW,
+            VAR wR = [@r]
+            VAR wCap = [@cap]
+            VAR wPx = DIVIDE ( _xPx, wCap )
+            VAR wAb = wCap > 0 && [@av] = 0
+            VAR wOv = [@oh] > 0
+            VAR wSeg =
+                CONCATENATEX (
+                    FILTER ( xPjw, [@r] = wR ),
+                    VAR wSh = [@h] * wPx
+                    RETURN
+                        "<i class='sg' style='height:" & FORMAT ( wSh, "0", "en-US" ) & "px;background:"
+                        & SWITCH ( [@k], 1, "#3F4654", 2, "#5F6778", 3, "#8A93A6", 4, "#AEB6C6", 5, "#C9CFDB", "#DDE1E8" )
+                        & ";color:" & IF ( [@k] <= 3, "#fff", "#1F2937" ) & ";animation-delay:" & FORMAT ( wR * 0.04, "0.00", "en-US" ) & "s'>"
+                        & IF ( wSh >= 22, FORMAT ( DIVIDE ( [@h], wCap ), "0%", "en-US" ), "" ) & "</i>",
+                    "", [@k], ASC
+                )
+            VAR wFr = IF ( wAb = FALSE () && [@fh] > 0, "<i class='sg sfr' style='height:" & FORMAT ( [@fh] * wPx, "0", "en-US" ) & "px'></i>", "" )
+            RETURN
+                "<div class='xc tt" & IF ( wOv, " xo", "" ) & "'>"
+                & IF (
+                    wAb,
+                    "<div class='cb abw' style='width:72%'><span>vắng</span></div>",
+                    "<div class='xt" & IF ( wOv, " red", "" ) & "'>" & FORMAT ( DIVIDE ( [@pl], wCap ), "0%", "en-US" ) & "</div><div class='xs'>" & wSeg & wFr & "</div>"
+                        & IF ( wOv, "<i class='xln' style='bottom:" & _xPx & "px'></i>", "" )
+                  )
+                // Tooltip của cột tuần: giờ từng dự án
+                & "<span class='tip" & IF ( wR > _nC - 3, " r", "" ) & "'><b>Tuần " & [@kw] & "</b><br>"
+                & CONCATENATEX ( FILTER ( xPjw, [@r] = wR ), dim_project[Project] & ": " & FORMAT ( [@h], "#,0", "en-US" ) & " h", "<br>", [@k], ASC )
+                & IF ( wAb, "Vắng cả tuần", "<br>Tổng: " & FORMAT ( [@pl], "#,0", "en-US" ) & " / " & FORMAT ( wCap, "#,0", "en-US" ) & " h" )
+                & IF ( wOv, "<br><em>Quá tải: +" & FORMAT ( [@oh], "#,0", "en-US" ) & " h</em>", "" )
+                & "</span></div>",
+            "", [@r], ASC
+          )
+        // Cột tổng
+        & "<div class='tot'>"
+        & IF (
+            xOh > 0,
+            "<b style='color:#DC2626'>+" & FORMAT ( xOh, "#,0", "en-US" ) & " h</b><em>" & xNov & " tuần quá tải</em>",
+            "<b>" & FORMAT ( xFh, "#,0", "en-US" ) & " h</b><em style='color:#6B7280'>còn trống</em>"
+          )
+        & "</div></div>"
+    )
+
+// ---------- E. Ma trận ----------
+VAR _head =
+    "<div class='mr hd whd'><div class='nm'>Tuần" & _arL & "</div>"
+    & CONCATENATEX (
+        _wk,
+        VAR r = [@r]
+        VAR vTxt = "<b>" & dim_date[KW] & "</b><small>" & FORMAT ( SUMX ( FILTER ( _uP, [@r] = r ), [@pl] ), "#,0", "en-US" ) & " h</small>"
+        RETURN
+            // Bấm vào số tuần để xem chi tiết tuần đó; đang xem tuần đó thì bấm lại để quay về bảng
+            "<div class='wh wk" & r & IF ( r = _curR, " cw", "" ) & "'><label for='w" & r & "' class='wl1'>" & vTxt & "</label>"
+            & "<label for='w0' class='wl0 wq" & r & "'>" & vTxt & "</label></div>",
+        "", [@r], ASC
+      )
+    & "<div class='tot'>" & _arR & "Trống " & _nW & " tuần tới</div></div>"
+VAR _body =
+    CONCATENATEX (
+        _rows,
+        VAR k = [@key]
+        // Cột tổng: chỉ tính từ tuần hiện tại trở đi
+        VAR fh = SUMX ( FILTER ( _u, [@key] = k && [@r] >= _curR ), [@fh] )
+        VAR oh = SUMX ( FILTER ( _u, [@key] = k && [@r] >= _curR ), [@oh] )
+        // 3 hàng đầu: tooltip hiện phía dưới để không bị cắt
+        VAR vOrd = [@ord]
+        VAR vDn = IF ( COUNTROWS ( FILTER ( _rows, [@ord] < vOrd ) ) < 3, " tdn", "" )
+        // vIsP: hàng của 1 người (xem theo người) thì bấm được để mở / đóng
+        VAR vIsP = [@kind] = "rp" && _view <> "Team"
+        VAR vPid = MID ( k, 3, 50 )
+        VAR vRow =
+            "<div class='mr " & [@kind] & IF ( vIsP, " rn", "" ) & vDn & "'>"
+            & IF ( vIsP, "<label for='c" & vPid & "' class='nm lk'>", "<div class='nm'>" )
+            & [@avt] & "<div class='nt'><b>" & [@nm] & "</b><small>" & [@sub] & "</small></div>"
+            & IF ( vIsP, "<i class='chv'>›</i></label>", "</div>" )
+            & CONCATENATEX ( FILTER ( _uH, [@key] = k ), [@h], "", [@r], ASC )
+            & "<div class='tot'><b>" & FORMAT ( fh, "#,0", "en-US" ) & " h</b>"
+            & IF ( oh > 0, "<em>+" & FORMAT ( oh, "#,0", "en-US" ) & " h quá tải</em>", "" ) & "</div></div>"
+        RETURN
+            IF (
+                vIsP,
+                // Checkbox ẩn + hàng thường + hàng mở rộng; người chọn ở Person_Pick thì mở sẵn
+                "<div class='pw" & vDn & "'><input type='checkbox' class='cbx' id='c" & vPid & "'" & IF ( k IN _openKeys, " checked", "" ) & ">"
+                    & vRow & CONCATENATEX ( FILTER ( _xRows, [@pk] = k ), [@xh] ) & "</div>",
+                vRow
+            ),
+        "", [@ord], ASC
+    )
+
+// Tóm tắt tuần hiện tại: 4 chip đếm người
+// 4 chip đếm: tuần hiện tại nếu nằm trong cửa sổ, không thì tuần đầu cửa sổ
+VAR _sumR = IF ( ISBLANK ( _curR ), 1, _curR )
+VAR _sumWs = _ws + 7 * ( _sumR - 1 )
+VAR _cw = FILTER ( _uP, [@r] = _sumR )
+VAR _nFr = COUNTROWS ( FILTER ( _cw, [@fh] >= 8 ) ) + 0
+VAR _nLt = COUNTROWS ( FILTER ( _cw, [@av] > 0 && [@oh] = 0 && [@fh] < 8 ) ) + 0
+VAR _nOv = COUNTROWS ( FILTER ( _cw, [@oh] > 0 ) ) + 0
+VAR _nAb = COUNTROWS ( FILTER ( _cw, [@cap] > 0 && [@av] = 0 ) ) + 0
+VAR _sum =
+    "<div class='sum'><div class='kw'>Tuần " & WEEKNUM ( _sumWs, 21 ) & IF ( ISBLANK ( _curR ), ", đầu khung", ", hiện tại" ) & "<small>"
+    & FORMAT ( _sumWs, "dd.MM", "en-US" ) & " – " & FORMAT ( _sumWs + 6, "dd.MM.yyyy", "en-US" ) & "</small></div>"
+    & "<span class='cnt'><i class='sq sq1'></i><b>" & _nFr & "</b> còn trống</span>"
+    & "<span class='cnt'><i class='sq sq2'></i><b>" & _nLt & "</b> trống &lt; 8 h</span>"
+    & "<span class='cnt'><i class='sq sq3'></i><b>" & _nOv & "</b> quá tải</span>"
+    & "<span class='cnt'><i class='sq sq4'></i><b>" & _nAb & "</b> vắng</span>"
+    // Nút Người | Team
+    & "<span class='seg'><label for='vP' class='sgb sgp'>Người</label><label for='vT' class='sgb sgt'>Team</label></span>"
+    // Nút Tuần | Tháng
+    & "<span class='seg sgm'><label for='kW' class='sgb skw'>Tuần</label><label for='kM' class='sgb skm'>Tháng</label></span>"
+    // Hàng 2 của thanh tóm tắt: chú thích
+    & "<div class='sl2'>"
+    & "<div class='lgd lgp'><span><i class='fu'></i>tải ≥ 90%</span><span><i class='fr'></i>tải &lt; 90%</span>"
+    & "<span><i style='background:#DC2626;height:4px'></i>quá tải</span><span><i class='abw'></i>vắng</span></div>"
+    & "<div class='lgd lgt'><span><i class='tg1'></i>đã xếp</span><span><i class='tg2'></i>còn trống</span><span><i class='tg3'></i>quá tải</span></div></div></div>"
+// ---------- E1b. Các tháng trong cửa sổ đang xem (dùng cho khung Người và khung Team) ----------
+// Tuần thuộc tháng của ngày thứ Năm trong tuần (theo chuẩn ISO)
+VAR _wkM = ADDCOLUMNS ( _wk, "@m", VAR vD = dim_date[Week_Start] + 3 RETURN YEAR ( vD ) * 100 + MONTH ( vD ) )
+VAR _mon0 = DISTINCT ( SELECTCOLUMNS ( _wkM, "@m", [@m] ) )
+VAR _mon =
+    ADDCOLUMNS (
+        _mon0,
+        "@w", VAR vM = [@m] RETURN COUNTROWS ( FILTER ( _wkM, [@m] = vM ) ),
+        "@r1", VAR vM = [@m] RETURN MINX ( FILTER ( _wkM, [@m] = vM ), [@r] ),
+        "@r2", VAR vM = [@m] RETURN MAXX ( FILTER ( _wkM, [@m] = vM ), [@r] ),
+        "@mi", RANKX ( _mon0, [@m], , ASC )
+    )
+// Độ rộng cột tháng tỷ lệ với số tuần của tháng
+VAR _mCols = "300px " & CONCATENATEX ( _mon, "calc(var(--wk) * " & [@w] & " + " & ( [@w] - 1 ) * 6 & "px)", " ", [@m], ASC ) & " 150px"
+// ---------- E2. Khung Team: tổng cả nhóm theo tuần (quá tải trừ vào giờ trống) ----------
+VAR _wkAgg =
+    ADDCOLUMNS (
+        _wk,
+        "@tp", VAR vR = [@r] RETURN SUMX ( FILTER ( _uP, [@r] = vR ), [@pl] ),
+        "@ta", VAR vR = [@r] RETURN SUMX ( FILTER ( _uP, [@r] = vR ), [@av] ),
+        "@tf", VAR vR = [@r] RETURN SUMX ( FILTER ( _uP, [@r] = vR ), [@fh] ),
+        "@to", VAR vR = [@r] RETURN SUMX ( FILTER ( _uP, [@r] = vR ), [@oh] )
+    )
+// Danh sách team đang hiện, @i = số thứ tự (1, 2, ...); 0 dành cho "Tất cả"
+VAR _tms = GROUPBY ( _ppl, dim_team[Team_ID], dim_team[Team], "@c", COUNTX ( CURRENTGROUP (), [@ro] ) )
+VAR _tmsI =
+    ADDCOLUMNS (
+        _tms,
+        "@i", RANKX ( _tms, VALUE ( RIGHT ( dim_team[Team_ID], 3 ) ), , ASC ),
+        // Leader của team: PM trước, rồi PO, rồi người đứng đầu theo tên (đổi quy tắc ở đây nếu có dữ liệu leader thật)
+        "@lid",
+            VAR vT = dim_team[Team_ID]
+            RETURN CONCATENATEX ( TOPN ( 1, FILTER ( _ppl, dim_team[Team_ID] = vT ), [@ro], ASC, dim_person[Name], ASC ), dim_person[Person_ID] )
+    )
+VAR _tmsL =
+    ADDCOLUMNS (
+        _tmsI,
+        "@ld", VAR vL = [@lid] RETURN CONCATENATEX ( FILTER ( _ppl, dim_person[Person_ID] = vL ), dim_person[Name] ),
+        "@ldi", VAR vL = [@lid] RETURN CONCATENATEX ( FILTER ( _ppl, dim_person[Person_ID] = vL ), [@ini] ),
+        "@ldr", VAR vL = [@lid] RETURN CONCATENATEX ( FILTER ( _ppl, dim_person[Person_ID] = vL ), dim_person[Role] )
+    )
+VAR _tMax = MAXX ( _tmsL, [@i] ) + 0
+VAR _sel = GENERATESERIES ( 0, _tMax, 1 )
+// Số liệu theo tuần: "Tất cả" (@i = 0) và từng team
+VAR _chA = SELECTCOLUMNS ( _wkAgg, "@i", 0, "@r", [@r], "@kw", dim_date[KW], "@tp", [@tp], "@ta", [@ta], "@tf", [@tf], "@to", [@to] )
+VAR _chT =
+    SELECTCOLUMNS (
+        _uT,
+        "@i", VAR vN = [@nm] RETURN MAXX ( FILTER ( _tmsL, dim_team[Team] = vN ), [@i] ),
+        "@r", [@r], "@kw", [@kw], "@tp", [@pl], "@ta", [@av], "@tf", [@fh], "@to", [@oh]
+    )
+VAR _ch = UNION ( _chA, _chT )
+VAR _tCnt = COUNTROWS ( _ppl ) + 0
+
+// Khối số liệu bên trái (mỗi lựa chọn một khối, CSS chỉ hiện khối đang chọn)
+VAR _tStats =
+    CONCATENATEX (
+        _sel,
+        VAR vI = [Value]
+        // Số liệu bên trái: từ tuần hiện tại trở đi
+        VAR vC = FILTER ( _ch, [@i] = vI && [@r] >= _curR )
+        RETURN
+            "<div class='ts ts" & vI & "'><small>Còn trống (đã trừ quá tải)</small><b class='tsb'>"
+            & FORMAT ( MAX ( 0, SUMX ( vC, [@tf] ) - SUMX ( vC, [@to] ) ), "#,0", "en-US" ) & " h</b>"
+            & "<small>Quá tải</small><b class='tsr'>" & FORMAT ( SUMX ( vC, [@to] ), "#,0", "en-US" ) & " h</b></div>",
+        "", [Value], ASC
+    )
+// Thẻ team: "Tất cả" + mỗi team một thẻ có avatar và tên leader
+VAR _tCards =
+    "<div class='tks'><label for='t0' class='tk tk0'><span class='avs'>"
+    & CONCATENATEX ( TOPN ( 3, _tmsL, [@i], ASC ), "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ldi] & "</i>", "", [@i], ASC )
+    & "</span><div class='nt'><b>Tất cả</b><small>" & _tCnt & " người · " & _tMax & " team</small></div></label>"
+    & CONCATENATEX (
+        _tmsL,
+        "<label for='t" & [@i] & "' class='tk tk" & [@i] & "'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ldi] & "</i>"
+            & "<div class='nt'><b>" & [@ld] & "</b><small>" & dim_team[Team] & " · " & [@c] & " người</small></div></label>",
+        "", [@i], ASC
+      )
+    & "</div>"
+// Cột biểu đồ (mỗi lựa chọn một nhóm cột; nhóm đang chọn hiện bằng display:contents)
+VAR _tCharts =
+    CONCATENATEX (
+        _sel,
+        VAR vI = [Value]
+        VAR vC = FILTER ( _ch, [@i] = vI )
+        // 480px = chiều cao cột của tuần có nhiều giờ có mặt nhất trong lựa chọn
+        VAR vPx = DIVIDE ( 480, MAXX ( vC, [@ta] ) )
+        VAR vName = IF ( vI = 0, "Tất cả", CONCATENATEX ( FILTER ( _tmsL, [@i] = vI ), dim_team[Team] ) )
+        RETURN
+            "<div class='tw tw" & vI & "'>"
+            & CONCATENATEX (
+                vC,
+                VAR vG = MAX ( 0, [@tp] - [@to] )
+                VAR vF = MAX ( 0, [@tf] - [@to] )
+                VAR vD = FORMAT ( [@r] * 0.04, "0.00", "en-US" )
+                RETURN
+                    "<div class='tc tt'><div class='tl'>" & FORMAT ( DIVIDE ( [@tp], [@ta] ), "0%", "en-US" )
+                    & IF ( [@to] > 0, "<em>+" & FORMAT ( [@to], "#,0", "en-US" ) & " h</em>", "" ) & "</div><div class='tb'>"
+                    & "<i class='tg1' style='height:" & FORMAT ( vG * vPx, "0", "en-US" ) & "px;animation-delay:" & vD & "s'></i>"
+                    & IF ( vF > 0, "<i class='tg2' style='height:" & FORMAT ( vF * vPx, "0", "en-US" ) & "px;animation-delay:" & vD & "s'></i>", "" )
+                    & IF ( [@to] > 0, "<i class='tg3' style='height:" & FORMAT ( MAX ( 4, [@to] * vPx ), "0", "en-US" ) & "px;animation-delay:" & vD & "s'></i>", "" )
+                    & "</div>"
+                    // Tooltip của cột tuần
+                    & "<span class='tip" & IF ( [@r] > _nC - 3, " r", "" ) & "'><b>" & vName & " · Tuần " & [@kw] & "</b>"
+                    & "<br>Đã xếp: " & FORMAT ( [@tp], "#,0", "en-US" ) & " h<br>Có mặt: " & FORMAT ( [@ta], "#,0", "en-US" ) & " h"
+                    & "<br>Tải: " & FORMAT ( DIVIDE ( [@tp], [@ta] ), "0%", "en-US" ) & "<br>Còn trống (ròng): " & FORMAT ( vF, "#,0", "en-US" ) & " h"
+                    & IF ( [@to] > 0, "<br><em>Quá tải: +" & FORMAT ( [@to], "#,0", "en-US" ) & " h</em>", "" ) & "</span></div>",
+                "", [@r], ASC
+              )
+            & "<div class='tot'><b>" & FORMAT ( DIVIDE ( SUMX ( FILTER ( vC, [@r] >= _curR ), [@tp] ), SUMX ( FILTER ( vC, [@r] >= _curR ), [@ta] ) ), "0%", "en-US" ) & "</b><em style='color:#6B7280'>tải " & _nW & " tuần</em></div></div>",
+        "", [Value], ASC
+    )
+// Cột biểu đồ theo tháng (mỗi lựa chọn một nhóm; chiều cao = giờ trung bình mỗi tuần của tháng)
+VAR _tChartsM =
+    CONCATENATEX (
+        _sel,
+        VAR vI = [Value]
+        VAR vC = FILTER ( _ch, [@i] = vI )
+        VAR vMx = MAXX ( _mon, VAR vA = [@r1] VAR vB = [@r2] RETURN DIVIDE ( SUMX ( FILTER ( vC, [@r] >= vA && [@r] <= vB ), [@ta] ), [@w] ) )
+        // 480px = chiều cao cột của tháng có nhiều giờ có mặt mỗi tuần nhất
+        VAR vPx = DIVIDE ( 480, vMx )
+        VAR vName = IF ( vI = 0, "Tất cả", CONCATENATEX ( FILTER ( _tmsL, [@i] = vI ), dim_team[Team] ) )
+        RETURN
+            "<div class='tq tq" & vI & "'>"
+            & CONCATENATEX (
+                _mon,
+                VAR vA = [@r1]
+                VAR vB = [@r2]
+                VAR vW = [@w]
+                VAR vX = FILTER ( vC, [@r] >= vA && [@r] <= vB )
+                VAR vTp = SUMX ( vX, [@tp] )
+                VAR vTa = SUMX ( vX, [@ta] )
+                VAR vTf = SUMX ( vX, [@tf] )
+                VAR vTo = SUMX ( vX, [@to] )
+                VAR vG = DIVIDE ( MAX ( 0, vTp - vTo ), vW )
+                VAR vF = DIVIDE ( MAX ( 0, vTf - vTo ), vW )
+                VAR vO = DIVIDE ( vTo, vW )
+                RETURN
+                    "<div class='tc tt'><div class='tl'>" & FORMAT ( DIVIDE ( vTp, vTa ), "0%", "en-US" )
+                    & IF ( vTo > 0, "<em>+" & FORMAT ( vTo, "#,0", "en-US" ) & " h</em>", "" ) & "</div><div class='tbm'>"
+                    & "<i class='tg1' style='height:" & FORMAT ( vG * vPx, "0", "en-US" ) & "px'></i>"
+                    & IF ( vF > 0, "<i class='tg2' style='height:" & FORMAT ( vF * vPx, "0", "en-US" ) & "px'></i>", "" )
+                    & IF ( vTo > 0, "<i class='tg3' style='height:" & FORMAT ( MAX ( 4, vO * vPx ), "0", "en-US" ) & "px'></i>", "" )
+                    & "</div>"
+                    // Tooltip của cột tháng
+                    & "<span class='tip" & IF ( vB > _nC - 3, " r", "" ) & "'><b>" & vName & " · Tháng " & MOD ( [@m], 100 ) & "</b> (" & vW & " tuần)"
+                    & "<br>Đã xếp: " & FORMAT ( vTp, "#,0", "en-US" ) & " h<br>Có mặt: " & FORMAT ( vTa, "#,0", "en-US" ) & " h"
+                    & "<br>Tải: " & FORMAT ( DIVIDE ( vTp, vTa ), "0%", "en-US" ) & "<br>Còn trống (ròng): " & FORMAT ( MAX ( 0, vTf - vTo ), "#,0", "en-US" ) & " h"
+                    & IF ( vTo > 0, "<br><em>Quá tải: +" & FORMAT ( vTo, "#,0", "en-US" ) & " h</em>", "" ) & "</span></div>",
+                "", [@m], ASC
+              )
+            & "<div class='tot'><b>" & FORMAT ( DIVIDE ( SUMX ( FILTER ( vC, [@r] >= _curR ), [@tp] ), SUMX ( FILTER ( vC, [@r] >= _curR ), [@ta] ) ), "0%", "en-US" ) & "</b><em style='color:#6B7280'>tải " & _nW & " tuần</em></div></div>",
+        "", [Value], ASC
+    )
+// Bảng dưới biểu đồ: "Tất cả" = bảng các team; chọn 1 team = bảng thành viên của team đó
+VAR _mHead =
+    "<div class='mtr mth'><span>Tên</span><span>Năng lực / tuần</span><span>Tải " & _nW & " tuần</span><span style='text-align:right'>Còn trống</span><span style='text-align:right'>Quá tải</span></div>"
+VAR _tmAll =
+    "<div class='tm tm0'><div class='mtt'>Các team</div>" & _mHead
+    & CONCATENATEX (
+        _tmsL,
+        VAR vI = [@i]
+        VAR vC = FILTER ( _ch, [@i] = vI && [@r] >= _curR )
+        VAR vU = DIVIDE ( SUMX ( vC, [@tp] ), SUMX ( vC, [@ta] ) )
+        VAR vTd = dim_team[Team_ID]
+        VAR vCap = SUMX ( FILTER ( _ppl, dim_team[Team_ID] = vTd ), dim_person[Weekly_Capacity] )
+        RETURN
+            "<div class='mtr'><div class='mnm'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ldi] & "</i><div class='nt'><b>" & dim_team[Team] & "</b><small>Leader: " & [@ld] & " · " & [@c] & " người</small></div></div>"
+            & "<span>" & FORMAT ( vCap, "#,0", "en-US" ) & " h</span>"
+            & "<div class='mbar'><span><i style='width:" & FORMAT ( MIN ( vU, 1 ) * 100, "0.0", "en-US" ) & "%;background:" & IF ( vU >= 0.9, "#7D8EA7", "#A7B4C6" ) & "'></i></span><b>" & FORMAT ( vU, "0%", "en-US" ) & "</b></div>"
+            & "<span class='mfr'>" & FORMAT ( SUMX ( vC, [@tf] ), "#,0", "en-US" ) & " h</span><span class='mov'>" & IF ( SUMX ( vC, [@to] ) > 0, "+" & FORMAT ( SUMX ( vC, [@to] ), "#,0", "en-US" ) & " h", "–" ) & "</span></div>",
+        "", [@i], ASC
+      )
+    & "</div>"
+VAR _tmTeams =
+    CONCATENATEX (
+        _tmsL,
+        VAR vI = [@i]
+        VAR vTid = dim_team[Team_ID]
+        VAR vLid = [@lid]
+        RETURN
+            "<div class='tm tm" & vI & "'><div class='mtt'>Thành viên " & dim_team[Team] & "</div>" & _mHead
+            & CONCATENATEX (
+                FILTER ( _ppl, dim_team[Team_ID] = vTid ),
+                VAR vK = "P|" & dim_person[Person_ID]
+                VAR vM = FILTER ( _uP, [@key] = vK && [@r] >= _curR )
+                VAR vU = DIVIDE ( SUMX ( vM, [@pl] ), SUMX ( vM, [@av] ) )
+                VAR vOh = SUMX ( vM, [@oh] )
+                RETURN
+                    "<div class='mtr'><div class='mnm'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i><div class='nt'><b>" & dim_person[Name]
+                    & IF ( dim_person[Person_ID] = vLid, "<span class='ldb'>Leader</span>", "" ) & "</b><small>" & dim_person[Role] & " · " & dim_person[Standort] & "</small></div></div>"
+                    & "<span>" & dim_person[Weekly_Capacity] & " h</span>"
+                    & "<div class='mbar'><span><i style='width:" & FORMAT ( MIN ( vU, 1 ) * 100, "0.0", "en-US" ) & "%;background:" & IF ( vU >= 0.9, "#7D8EA7", "#A7B4C6" ) & "'></i></span><b>" & FORMAT ( vU, "0%", "en-US" ) & "</b></div>"
+                    & "<span class='mfr'>" & FORMAT ( SUMX ( vM, [@fh] ), "#,0", "en-US" ) & " h</span><span class='mov'>" & IF ( vOh > 0, "+" & FORMAT ( vOh, "#,0", "en-US" ) & " h", "–" ) & "</span></div>",
+                "", [@ro], ASC, dim_person[Name], ASC
+              )
+            & "</div>",
+        "", [@i], ASC
+    )
+// Radio ẩn để chọn team: phải đứng trước .trw và .tmm
+VAR _tRadios =
+    CONCATENATEX ( _sel, "<input type='radio' name='tm' id='t" & [Value] & "' class='rv'" & IF ( [Value] = 0, " checked", "" ) & ">", "", [Value], ASC )
+VAR _team =
+    _tRadios
+    & "<div class='trw'><div class='tst'>" & _tStats & _tCards & "</div>" & _tCharts & _tChartsM & "</div>"
+    & "<div class='tmm'>" & _tmAll & _tmTeams & "</div>"
+
+// ---------- E3. Khung theo tháng (khung Người) ----------
+VAR _mHd =
+    "<div class='mr hd mhd' style='grid-template-columns:" & _mCols & "'><div class='nm'>Tháng" & _arL & "</div>"
+    & CONCATENATEX (
+        _mon,
+        VAR vA = [@r1]
+        VAR vB = [@r2]
+        VAR vTxt = "<b>Tháng " & MOD ( [@m], 100 ) & "</b><small>" & FORMAT ( SUMX ( FILTER ( _uP, [@r] >= vA && [@r] <= vB ), [@fh] ), "#,0", "en-US" ) & " h trống</small>"
+        RETURN
+            // Bấm tên tháng để xem chi tiết tháng; đang xem tháng đó thì bấm lại để quay về bảng
+            "<div class='wh mk" & [@mi] & "'><label for='m" & [@mi] & "' class='ml1'>" & vTxt & "</label>"
+            & "<label for='w0' class='ml0 mq" & [@mi] & "'>" & vTxt & "</label></div>",
+        "", [@m], ASC
+      )
+    & "<div class='tot'>" & _arR & "Trống " & _nW & " tuần tới</div></div>"
+VAR _mBody =
+    CONCATENATEX (
+        FILTER ( _rows, [@kind] <> "rt" ),
+        VAR k = [@key]
+        VAR vRw = FILTER ( _u, [@key] = k )
+        VAR vRwF = FILTER ( vRw, [@r] >= _curR )
+        VAR vOrd = [@ord]
+        VAR vDn = IF ( COUNTROWS ( FILTER ( _rows, [@ord] < vOrd ) ) < 3, " tdn", "" )
+        VAR vNm = [@nm]
+        RETURN
+            "<div class='mr " & [@kind] & vDn & "' style='grid-template-columns:" & _mCols & "'><div class='nm'>" & [@avt]
+            & "<div class='nt'><b>" & [@nm] & "</b><small>" & [@sub] & "</small></div></div>"
+            & CONCATENATEX (
+                _mon,
+                VAR vA = [@r1]
+                VAR vB = [@r2]
+                VAR vX = FILTER ( vRw, [@r] >= vA && [@r] <= vB )
+                VAR vPl = SUMX ( vX, [@pl] )
+                VAR vAv = SUMX ( vX, [@av] )
+                VAR vFh = SUMX ( vX, [@fh] )
+                VAR vOh = SUMX ( vX, [@oh] )
+                VAR vN = MAXX ( vX, [@n] )
+                // Chiều cao = giờ có mặt trung bình mỗi tuần so với 40 h × số người
+                VAR vH = MIN ( 1, DIVIDE ( vAv, [@w] * 40 * vN ) )
+                VAR vO = MIN ( 1, DIVIDE ( vOh, vAv ) )
+                VAR vF = MIN ( 1 - vO, DIVIDE ( vFh, vAv ) )
+                RETURN
+                    "<div class='mcl tt'><div class='mcb" & IF ( vAv = 0, " abw", "" ) & "' style='height:" & IF ( vAv = 0, "26", FORMAT ( MAX ( vH, 0.15 ) * 40, "0", "en-US" ) ) & "px'>"
+                    & IF (
+                        vAv = 0,
+                        "<span>vắng</span>",
+                        "<i class='mg3' style='height:" & FORMAT ( vO * 100, "0.0", "en-US" ) & "%'></i>"
+                            & "<i class='mg2' style='height:" & FORMAT ( vF * 100, "0.0", "en-US" ) & "%'></i>"
+                            & "<i class='mg1' style='height:" & FORMAT ( MAX ( 0, 1 - vO - vF ) * 100, "0.0", "en-US" ) & "%'></i>"
+                            & "<span>" & FORMAT ( DIVIDE ( vPl, vAv ), "0%", "en-US" ) & "</span>"
+                      )
+                    & "</div><span class='tip" & IF ( vB > _nC - 3, " r", "" ) & "'><b>" & vNm & " · Tháng " & MOD ( [@m], 100 ) & "</b>"
+                    & " (" & [@w] & " tuần)<br>Đã xếp: " & FORMAT ( vPl, "#,0", "en-US" ) & " h<br>Có mặt: " & FORMAT ( vAv, "#,0", "en-US" ) & " h"
+                    & "<br>Tải: " & FORMAT ( DIVIDE ( vPl, vAv ), "0%", "en-US" ) & "<br>Còn trống: " & FORMAT ( vFh, "#,0", "en-US" ) & " h"
+                    & IF ( vOh > 0, "<br><em>Quá tải: +" & FORMAT ( vOh, "#,0", "en-US" ) & " h</em>", "" ) & "</span></div>",
+                "", [@m], ASC
+              )
+            & "<div class='tot'><b>" & FORMAT ( SUMX ( vRwF, [@fh] ), "#,0", "en-US" ) & " h</b>"
+            & IF ( SUMX ( vRwF, [@oh] ) > 0, "<em>+" & FORMAT ( SUMX ( vRwF, [@oh] ), "#,0", "en-US" ) & " h quá tải</em>", "" ) & "</div></div>",
+        "", [@ord], ASC
+    )
+
+// ---------- E4. Chi tiết 1 tuần: bấm số tuần ở hàng tiêu đề (radio ẩn w1..wN; w0 = xem tất cả tuần) ----------
+VAR _wd =
+    CONCATENATEX (
+        _wk,
+        VAR vR = [@r]
+        VAR vWs = dim_date[Week_Start]
+        VAR vKw = dim_date[KW]
+        VAR vRows = FILTER ( _uP, [@r] = vR )
+        // Số tuần quá tải liên tiếp tính tới tuần này (@st); khóa sắp xếp (@sk): trống nhiều → đầy → quá tải → vắng
+        VAR vSt =
+            ADDCOLUMNS (
+                vRows,
+                "@st",
+                    VAR vK = [@key]
+                    VAR vLast0 = MAXX ( FILTER ( _uP, [@key] = vK && [@r] <= vR && [@oh] = 0 ), [@r] )
+                    RETURN IF ( [@oh] > 0, vR - COALESCE ( vLast0, 0 ), 0 ),
+                "@sk",
+                    IF ( [@cap] > 0 && [@av] = 0, 4000000, IF ( [@oh] > 0, 3000000 + [@oh], IF ( [@fh] = 0, 2000000, 1000000 - [@fh] ) ) )
+            )
+        // Thang đo chung cho 2 phía trục: giờ lớn nhất trong tuần
+        VAR vMax = MAXX ( vRows, MAX ( [@pl], MAX ( [@fh], [@oh] ) ) )
+        VAR vNfr = COUNTROWS ( FILTER ( vRows, [@fh] >= 8 ) ) + 0
+        VAR vNlt = COUNTROWS ( FILTER ( vRows, [@av] > 0 && [@oh] = 0 && [@fh] < 8 ) ) + 0
+        VAR vNov = COUNTROWS ( FILTER ( vRows, [@oh] > 0 ) ) + 0
+        VAR vN3 = COUNTROWS ( FILTER ( vSt, [@st] >= 3 ) ) + 0
+        VAR vNab = COUNTROWS ( FILTER ( vRows, [@cap] > 0 && [@av] = 0 ) ) + 0
+        RETURN
+            "<div class='wdb wd" & vR & "'><div class='wdh'><div class='kw'>Tuần " & vKw & "<small>"
+            & FORMAT ( vWs, "dd.MM", "en-US" ) & " – " & FORMAT ( vWs + 6, "dd.MM.yyyy", "en-US" ) & "</small></div>"
+            & "<span class='cnt'><i class='sq sq1'></i><b>" & vNfr & "</b> còn trống</span>"
+            & "<span class='cnt'><i class='sq sq2'></i><b>" & vNlt & "</b> trống &lt; 8 h</span>"
+            & "<span class='cnt'><i class='sq sq3'></i><b>" & vNov & "</b> quá tải" & IF ( vN3 > 0, " <em class='red'>trong đó " & vN3 & " người ≥ 3 tuần liên tiếp</em>", "" ) & "</span>"
+            & "<span class='cnt'><i class='sq sq4'></i><b>" & vNab & "</b> vắng</span>"
+            & "<label for='w0' class='sgb wbk'>‹ Tất cả tuần</label></div>"
+            // Nhãn trục
+            & "<div class='wrw wlb'><span></span><span style='text-align:right'>đã xếp</span><i class='wax'></i><span>còn trống / quá tải</span></div>"
+            & CONCATENATEX (
+                vSt,
+                VAR vId = MID ( [@key], 3, 50 )
+                VAR vAb = [@cap] > 0 && [@av] = 0
+                RETURN
+                    "<div class='wrw'><div class='nm'>"
+                    & CONCATENATEX ( FILTER ( _ppl, dim_person[Person_ID] = vId ), "<i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>" )
+                    & "<div class='nt'><b>" & [@nm] & "</b></div></div>"
+                    // Bên trái trục: giờ đã xếp
+                    & "<div class='wl'>" & IF ( [@pl] > 0, "<i class='wpl' style='width:" & FORMAT ( DIVIDE ( MIN ( [@pl], [@av] ), vMax ) * 100, "0.0", "en-US" ) & "%'></i>", "" ) & "</div><i class='wax'></i>"
+                    // Bên phải trục: còn trống / quá tải / đầy / vắng
+                    & "<div class='wr'>"
+                    & SWITCH (
+                        TRUE (),
+                        vAb, "<i class='wab'>vắng</i>",
+                        [@oh] > 0,
+                            "<i class='wov" & IF ( [@st] >= 3, " w3", "" ) & "' style='width:" & FORMAT ( DIVIDE ( [@oh], vMax ) * 100, "0.0", "en-US" ) & "%'></i>"
+                                & "<span class='wlo'>+" & FORMAT ( [@oh], "#,0", "en-US" ) & " h" & IF ( [@st] >= 2, " · " & [@st] & " tuần liên tiếp", "" ) & "</span>",
+                        [@fh] > 0,
+                            "<i class='wfr' style='width:" & FORMAT ( DIVIDE ( [@fh], vMax ) * 100, "0.0", "en-US" ) & "%'></i><span class='wlf'>" & FORMAT ( [@fh], "#,0", "en-US" ) & " h</span>",
+                        "<span class='wlv'>đầy</span>"
+                      )
+                    & "</div></div>",
+                "", [@sk], ASC
+              )
+            & "</div>",
+        "", [@r], ASC
+    )
+
+// ---------- E5. Chi tiết 1 tháng: bấm tên tháng ở hàng tiêu đề khung Tháng (radio ẩn m1..mM, chung nhóm với w0..wN) ----------
+VAR _md =
+    CONCATENATEX (
+        _mon,
+        VAR vA = [@r1]
+        VAR vB = [@r2]
+        VAR vW = [@w]
+        VAR vMi = [@mi]
+        VAR vMm = [@m]
+        // Cộng dồn các tuần trong tháng cho từng người
+        VAR vP =
+            ADDCOLUMNS (
+                _ppl,
+                "@mpl", VAR vK = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB ), [@pl] ),
+                "@mav", VAR vK = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB ), [@av] ),
+                "@mfh", VAR vK = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB ), [@fh] ),
+                "@moh", VAR vK = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB ), [@oh] ),
+                "@mno", VAR vK = "P|" & dim_person[Person_ID] RETURN COUNTROWS ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB && [@oh] > 0 ) ) + 0,
+                "@mna", VAR vK = "P|" & dim_person[Person_ID] RETURN COUNTROWS ( FILTER ( _uP, [@key] = vK && [@r] >= vA && [@r] <= vB && [@cap] > 0 && [@av] = 0 ) ) + 0
+            )
+        // Khóa sắp xếp: trống nhiều → đầy → quá tải → vắng cả tháng
+        VAR vS =
+            ADDCOLUMNS (
+                vP,
+                "@sk", IF ( [@mna] >= vW, 4000000, IF ( [@moh] > 0, 3000000 + [@moh], IF ( [@mfh] = 0, 2000000, 1000000 - [@mfh] ) ) )
+            )
+        VAR vMax = MAXX ( vS, MAX ( [@mpl], MAX ( [@mfh], [@moh] ) ) )
+        VAR vNfr = COUNTROWS ( FILTER ( vS, [@mfh] > 0 && [@moh] = 0 && [@mna] < vW ) ) + 0
+        VAR vNfu = COUNTROWS ( FILTER ( vS, [@mfh] = 0 && [@moh] = 0 && [@mna] < vW ) ) + 0
+        VAR vNov = COUNTROWS ( FILTER ( vS, [@moh] > 0 ) ) + 0
+        VAR vNab = COUNTROWS ( FILTER ( vS, [@mna] >= vW ) ) + 0
+        VAR vD1 = _ws + 7 * ( vA - 1 )
+        RETURN
+            "<div class='mdb md" & vMi & "'><div class='wdh'><div class='kw'>Tháng " & MOD ( vMm, 100 ) & "/" & INT ( vMm / 100 ) & "<small>"
+            & vW & " tuần · " & FORMAT ( vD1, "dd.MM", "en-US" ) & " – " & FORMAT ( vD1 + 7 * vW - 1, "dd.MM.yyyy", "en-US" ) & "</small></div>"
+            & "<span class='cnt'><i class='sq sq1'></i><b>" & vNfr & "</b> còn trống</span>"
+            & "<span class='cnt'><i class='sq sq2'></i><b>" & vNfu & "</b> đầy</span>"
+            & "<span class='cnt'><i class='sq sq3'></i><b>" & vNov & "</b> quá tải</span>"
+            & "<span class='cnt'><i class='sq sq4'></i><b>" & vNab & "</b> vắng cả tháng</span>"
+            & "<label for='w0' class='sgb wbk'>‹ Tất cả tháng</label></div>"
+            & "<div class='wrw wlb'><span></span><span style='text-align:right'>đã xếp (cả tháng)</span><i class='wax'></i><span>còn trống / quá tải</span></div>"
+            & CONCATENATEX (
+                vS,
+                VAR vAb = [@mna] >= vW
+                // Ghi chú vắng một phần tháng
+                VAR vNote = IF ( [@mna] > 0 && vAb = FALSE (), "<span class='wlv'>· vắng " & [@mna] & " tuần</span>", "" )
+                RETURN
+                    "<div class='wrw'><div class='nm'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>"
+                    & "<div class='nt'><b>" & dim_person[Name] & "</b></div></div>"
+                    & "<div class='wl'>" & IF ( [@mpl] > 0, "<i class='wpl' style='width:" & FORMAT ( DIVIDE ( MIN ( [@mpl], [@mav] ), vMax ) * 100, "0.0", "en-US" ) & "%'></i>", "" ) & "</div><i class='wax'></i>"
+                    & "<div class='wr'>"
+                    & SWITCH (
+                        TRUE (),
+                        vAb, "<i class='wab'>vắng cả tháng</i>",
+                        [@moh] > 0,
+                            "<i class='wov" & IF ( [@mno] >= 3, " w3", "" ) & "' style='width:" & FORMAT ( DIVIDE ( [@moh], vMax ) * 100, "0.0", "en-US" ) & "%'></i>"
+                                & "<span class='wlo'>+" & FORMAT ( [@moh], "#,0", "en-US" ) & " h · " & [@mno] & " tuần quá tải</span>",
+                        [@mfh] > 0,
+                            "<i class='wfr' style='width:" & FORMAT ( DIVIDE ( [@mfh], vMax ) * 100, "0.0", "en-US" ) & "%'></i><span class='wlf'>" & FORMAT ( [@mfh], "#,0", "en-US" ) & " h</span>",
+                        "<span class='wlv'>đầy</span>"
+                      )
+                    & vNote & "</div></div>",
+                "", [@sk], ASC, dim_person[Name], ASC
+              )
+            & "</div>",
+        "", [@m], ASC
+    )
+
+// Ghép khung ma trận: các radio ẩn phải đứng trước .sum và .mx để CSS đổi khung được
+VAR _mxCard =
+    "<div class='pnl'><input type='radio' name='vw' id='vP' class='rv' checked><input type='radio' name='vw' id='vT' class='rv'>"
+    & "<input type='radio' name='kt' id='kW' class='rv' checked><input type='radio' name='kt' id='kM' class='rv'>"
+    // Radio chi tiết tuần: w0 = xem tất cả tuần (mặc định), w1..wN = chi tiết từng tuần
+    & "<input type='radio' name='wdr' id='w0' class='rv' checked>"
+    & CONCATENATEX ( _wk, "<input type='radio' name='wdr' id='w" & [@r] & "' class='rv'>", "", [@r], ASC )
+    // Radio chi tiết tháng m1..mM (cùng nhóm, nên chỉ 1 chi tiết tuần hoặc tháng mở tại một lúc)
+    & CONCATENATEX ( _mon, "<input type='radio' name='wdr' id='m" & [@mi] & "' class='rv'>", "", [@mi], ASC )
+    // Radio vị trí tuần: p0 = tuần hiện tại (mặc định), p1 = lùi 1 tuần, ...
+    & CONCATENATEX ( _pos, "<input type='radio' name='pw' id='p" & [Value] & "' class='rv'" & IF ( [Value] = 0, " checked", "" ) & ">", "", [Value], ASC )
+    // Lưới cột tháng của khung Team (độ rộng theo số tuần mỗi tháng)
+    // --wk = độ rộng 1 cột tuần, để vừa đúng _nW tuần trong khung nhìn; lưới đủ _nC cột (quá khứ + tương lai)
+    // --np = số tuần quá khứ đang có; mỗi radio p0..pN ứng với số tuần lùi lại
+    & "<style>.mx{--np:" & _np & ";--wk:calc((100cqw - " & ( 450 + ( _nW + 1 ) * 6 ) & "px) / " & _nW & ")}"
+    & CONCATENATEX ( _pos, "#p" & [Value] & ":checked~.mx{--off:" & [Value] & "}#p" & [Value] & ":checked~.mx .al" & [Value] & ",#p" & [Value] & ":checked~.mx .ar" & [Value] & "{display:inline-flex}", "", [Value], ASC )
+    & ".mr,.trw{grid-template-columns:300px repeat(" & _nC & ",var(--wk)) 150px}"
+    & "#kM:checked~.mx .trw{grid-template-columns:" & _mCols & "}"
+    // Chi tiết tuần: hiện khối của tuần đang chọn, ẩn các khung khác, tô đậm số tuần đang chọn
+    // Đang xem chi tiết 1 tuần: tuần hiện tại chỉ còn viền xanh nhạt, xanh đặc dành cho tuần đang chọn
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .wh.cw b", ",", [@r], ASC ) & "{background:none;color:#2563EB;box-shadow:inset 0 0 0 1.5px #93C5FD}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .wd" & [@r] & "{display:block}#w" & [@r] & ":checked~.mx .wh.wk" & [@r] & " b{background:#1D4ED8;color:#fff;box-shadow:0 0 0 3px #BFDBFE}#w" & [@r] & ":checked~.mx .wk" & [@r] & " .wl1{display:none}#w" & [@r] & ":checked~.mx .wq" & [@r] & "{display:block}", "", [@r], ASC )
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .vwp,#w" & [@r] & ":checked~.mx .vwm,#w" & [@r] & ":checked~.mx .vwt,#w" & [@r] & ":checked~.mx>.mhd", ",", [@r], ASC ) & "{display:none}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx>.whd", ",", [@r], ASC ) & "{display:grid}"
+    // Chọn tuần / tháng nào thì chỉ cái đó tô xanh: bỏ màu xanh mặc định của tuần hiện tại
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .whd .cw b", ",", [@r], ASC ) & "{background:transparent;color:#1F2937;box-shadow:none}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .whd .wk" & [@r] & " b{background:#2563EB;color:#fff;box-shadow:none}", "", [@r], ASC )
+    // Chi tiết tháng
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx .md" & [@mi] & "{display:block}#m" & [@mi] & ":checked~.mx .mhd .mk" & [@mi] & " b{background:#2563EB;color:#fff}#m" & [@mi] & ":checked~.mx .mk" & [@mi] & " .ml1{display:none}#m" & [@mi] & ":checked~.mx .mq" & [@mi] & "{display:block}", "", [@mi], ASC )
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx .vwp,#m" & [@mi] & ":checked~.mx .vwm,#m" & [@mi] & ":checked~.mx .vwt,#m" & [@mi] & ":checked~.mx>.whd", ",", [@mi], ASC ) & "{display:none}"
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx>.mhd", ",", [@mi], ASC ) & "{display:grid}</style>"
+    & _sum & "<div class='mx'>" & _head & _mHd & "<div class='vwp'>" & _body & "</div><div class='vwm'>" & _mBody & "</div><div class='vwt'>" & _team & "</div>" & _wd & _md & "</div></div>"
+
+// ---------- F. Thẻ Mức tải (theo cửa sổ đang xem) ----------
+// Chỉ tính từ tuần hiện tại trở đi
+VAR _uPf = FILTER ( _uP, [@r] >= _curR )
+VAR _sPl = SUMX ( _uPf, [@pl] )
+VAR _sAv = SUMX ( _uPf, [@av] )
+VAR _sFh = SUMX ( _uPf, [@fh] )
+VAR _sOh = SUMX ( _uPf, [@oh] )
+VAR _utl = COALESCE ( DIVIDE ( _sPl, _sAv ), 0 )
+VAR _scope =
+    "<div class='scp'>" & IF ( ISFILTERED ( dim_person ), "Theo bộ lọc", "Tất cả" ) & " · " & _nW & " tuần tới</div>"
+VAR _utCard =
+    "<div class='pnl'><h3>Mức tải</h3>" & _scope
+    & "<div class='big'>" & FORMAT ( _utl * 100, "0", "en-US" ) & "<small>%</small></div>"
+    & "<div class='pb'><i style='width:" & FORMAT ( MIN ( _utl, 1 ) * 100, "0.0", "en-US" ) & "%'></i></div>"
+    & "<div class='ln'><b>" & FORMAT ( _sPl, "#,0", "en-US" ) & "</b> / " & FORMAT ( _sAv, "#,0", "en-US" ) & " h đã xếp lịch</div>"
+    & "<div class='ln'>Trống <b>" & FORMAT ( _sFh, "#,0", "en-US" ) & " h</b> · <span class='red'>Quá tải " & FORMAT ( _sOh, "#,0", "en-US" ) & " h</span></div></div>"
+
+// ---------- G. Thẻ Top 5 dự án ----------
+VAR _pjAll =
+    CALCULATETABLE (
+        ADDCOLUMNS (
+            SUMMARIZE ( dim_project, dim_project[Project], dim_project[Kunde], dim_project[Lead_Team], dim_project[Budget_h] ),
+            "@h", [Planned h]
+        ),
+        REMOVEFILTERS ( dim_date ),
+        dim_date[Week_Start] >= _cur,
+        dim_date[Week_Start] < _end
+    )
+VAR _pj = TOPN ( 5, FILTER ( _pjAll, [@h] > 0 ), [@h], DESC )
+VAR _pjMax = MAXX ( _pj, [@h] )
+VAR _pjCard =
+    "<div class='pnl'><h3>Dự án</h3>" & _scope
+    & CONCATENATEX (
+        _pj,
+        "<div class='pjr tt'><div class='pjn'>" & dim_project[Project] & "</div>"
+            & "<div class='pjb'><i style='width:" & FORMAT ( DIVIDE ( [@h], _pjMax ) * 100, "0.0", "en-US" ) & "%'></i></div>"
+            & "<div class='pjv'>" & FORMAT ( [@h], "#,0", "en-US" ) & " h</div>"
+            // Tooltip của dự án
+            & "<span class='tip l'><b>" & dim_project[Project] & "</b><br>Khách hàng: " & dim_project[Kunde] & "<br>Team: " & dim_project[Lead_Team]
+            & "<br>Đã xếp " & _nW & " tuần: " & FORMAT ( [@h], "#,0", "en-US" ) & " h<br>Ngân sách cả dự án: " & FORMAT ( dim_project[Budget_h], "#,0", "en-US" ) & " h</span></div>",
+        "", [@h], DESC
+      )
+    & "</div>"
+
+// ---------- H. Thẻ Ai còn trống (6 người trống nhiều giờ nhất) ----------
+VAR _pf =
+    ADDCOLUMNS ( _ppl, "@f", VAR vP = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uPf, [@key] = vP ), [@fh] ) )
+VAR _top6 = TOPN ( 6, FILTER ( _pf, [@f] > 0 ), [@f], DESC )
+VAR _frCard =
+    "<div class='pnl'><h3>Ai còn trống</h3>" & _scope
+    & "<div class='fhd'><span>Người</span><span>Trống</span></div>"
+    & CONCATENATEX (
+        _top6,
+        "<div class='frw'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>"
+            & "<div class='nt'><b>" & dim_person[Name] & "</b><small>" & dim_person[Role] & " · " & dim_team[Team] & "</small></div>"
+            & "<span class='fp'>" & FORMAT ( [@f], "#,0", "en-US" ) & " h</span></div>",
+        "", [@f], DESC
+      )
+    & "</div>"
+
+// ---------- I. Thanh tiêu đề + chỗ trống đặt slicer (slicer là visual gốc, đặt đè lên khoảng trống này) ----------
+VAR _hdr =
+    "<div class='pnl hdr'><svg class='logo' viewBox='0 0 48 48'><path d='M14 36h22a8 8 0 0 0 1-15.9A11 11 0 0 0 16 17a9.5 9.5 0 0 0-2 19z' fill='#2563EB'/><path d='M17 30l5-5 4 3 6-7' fill='none' stroke='#fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/></svg>"
+    & "<div><div class='ttl'>Kế hoạch nguồn lực</div><div class='sub'>Theo người, team, dự án · " & _nW & " tuần tới · bấm ‹ › xem " & _nPast & " tuần trước · dữ liệu giả lập</div></div>"
+    // Nút đổi nền tối / sáng
+    & "<label for='dk' class='dkb'><span class='dk1'>☾ Nền tối</span><span class='dk2'>☀ Nền sáng</span></label>"
+    & "<div class='slot'></div></div>"
+
+// ---------- J. Ghép cả trang ----------
+RETURN
+    _css
+    // Checkbox ẩn của nút nền tối phải đứng ngay trước .dkw (khung bao cả trang)
+    & "<input type='checkbox' id='dk' class='rv'><div class='dkw'>"
+    & "<div class='pg'>" & _hdr
+    & "<div class='main'>" & _mxCard & "<div class='side'>" & _utCard & _pjCard & _frCard & "</div></div>"
+    & "</div></div>"
+    & _cssDark
+// ===== HẾT MEASURE: dòng cuối cùng phải là dòng này =====

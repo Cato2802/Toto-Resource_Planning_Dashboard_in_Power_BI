@@ -15,6 +15,23 @@ Built by **Daniel Dang** · Data Analyst (SQL · Power BI · DAX · Power Query)
 | ![People, month](images/03_people_month_light.png) | ![People, month, dark](images/06_people_month_dark.png) |
 | ![Team, month](images/04_team_month_light.png) | ![Team, month, dark](images/08_team_month_dark.png) |
 
+## Reference design
+
+The starting point was a resource planner shown by **Marlon Etzel** in a [LinkedIn post](https://lnkd.in/p/gYxzAxMW): a Power BI custom visual written in TypeScript. The frames below are from his post. This project rebuilds the same ideas inside the HTML Content visual, with DAX and CSS only.
+
+| Original (Marlon Etzel, TypeScript custom visual) | |
+|---|---|
+| ![Reference: team view](images/reference/ref_01_team_view.png) | ![Reference: expanded row](images/reference/ref_02_expanded_row.png) |
+| ![Reference: month view](images/reference/ref_03_month_view.png) | ![Reference: week detail](images/reference/ref_04_week_detail.png) |
+
+| Feature in the reference | How it is rebuilt here |
+|---|---|
+| Click a person to expand the row | Hidden checkbox + `<label>` per person |
+| People ⇄ Team, Week ⇄ Month buttons | Radio groups + CSS sibling selectors |
+| ‹ › week arrows | One radio per offset, CSS `translateX` on the grid |
+| Click a week for a diverging bar chart | One pre-rendered block per week, shown with `:checked` |
+| Demand ("Bedarf") mode | Not rebuilt: it needs JavaScript |
+
 ## What the page does
 
 The page answers the questions a staffing lead asks every week: *who has free hours, who is overbooked, and for how long?*
@@ -78,4 +95,4 @@ To regenerate the data: `python scripts/make_sample_from_spec.py scripts/resourc
 
 ## Credits
 
-Layout and interactions are inspired by the "Ressourcenplanung" Power BI custom visual shown by Marlon Etzel on LinkedIn (built there in TypeScript). This project rebuilds the idea with DAX + HTML/CSS only, on synthetic data. The on-page labels are in Vietnamese.
+Design and interactions: Marlon Etzel's "Ressourcenplanung" custom visual ([LinkedIn post](https://lnkd.in/p/gYxzAxMW)); the reference images in `images/reference/` are his. Everything else (DAX measure, CSS, data model, synthetic data) is my own work. On-page labels are in Vietnamese.

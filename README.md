@@ -14,6 +14,7 @@ Built by **Daniel Dang** · Data Analyst (SQL · Power BI · DAX · Power Query)
 | ![Team, week](images/02_team_week_light.png) | ![Team, week, dark](images/07_team_week_dark.png) |
 | ![People, month](images/03_people_month_light.png) | ![People, month, dark](images/06_people_month_dark.png) |
 | ![Team, month](images/04_team_month_light.png) | ![Team, month, dark](images/08_team_month_dark.png) |
+| ![Week detail](images/09_week_detail_light.png) | ![Week detail, dark](images/10_week_detail_dark.png) |
 
 ## What the page does
 
@@ -24,7 +25,7 @@ The page answers the questions a staffing lead asks every week: *who has free ho
 - **People ⇄ Team toggle:** the team view shows total planned, free and overbooked hours per week. Clicking a team-leader card switches the chart to that team and lists its members with utilisation bars.
 - **Week ⇄ Month toggle:** months are drawn wider or narrower according to how many weeks they contain.
 - **‹ › arrows:** the page always opens on the current week, and the arrows step back up to 12 weeks to check past overload.
-- **Click a week or a month header:** opens a diverging bar chart for that period (planned hours left of the axis, free or overbooked hours right of it, including how many weeks in a row a person has been overbooked). Click the header again to go back.
+- **Click a week or a month header:** opens a diverging bar chart for that period (planned hours left of the axis, free or overbooked hours right of it, including how many weeks in a row a person has been overbooked). The *Utilisation* and *Who is free* cards on the right switch to the same week or month. Click the header again to go back.
 - **Dark mode** button, KPI cards (utilisation, top projects, people with the most free hours) and tooltips on every cell.
 
 ## How it works

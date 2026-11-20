@@ -131,6 +131,9 @@ VAR _css4 =
 .ln{font-size:15px;color:#4B5563;line-height:1.6}
 .ln b{color:#111827}
 .red{color:#DC2626;font-weight:600}
+/* Thẻ Mức tải / Ai còn trống có nhiều bản (mặc định, từng tuần, từng tháng); chỉ bản mặc định hiện sẵn */
+.ucv{display:none}
+.ucx0,.fcx0{display:block}
 
 /* ===== 6. Thẻ Top 5 dự án (thanh ngang) ===== */
 /* 150px: độ rộng tên dự án, 80px: độ rộng số giờ */
@@ -1219,11 +1222,6 @@ VAR _md =
 VAR _mxCard =
     "<div class='pnl'><input type='radio' name='vw' id='vP' class='rv' checked><input type='radio' name='vw' id='vT' class='rv'>"
     & "<input type='radio' name='kt' id='kW' class='rv' checked><input type='radio' name='kt' id='kM' class='rv'>"
-    // Radio chi tiết tuần: w0 = xem tất cả tuần (mặc định), w1..wN = chi tiết từng tuần
-    & "<input type='radio' name='wdr' id='w0' class='rv' checked>"
-    & CONCATENATEX ( _wk, "<input type='radio' name='wdr' id='w" & [@r] & "' class='rv'>", "", [@r], ASC )
-    // Radio chi tiết tháng m1..mM (cùng nhóm, nên chỉ 1 chi tiết tuần hoặc tháng mở tại một lúc)
-    & CONCATENATEX ( _mon, "<input type='radio' name='wdr' id='m" & [@mi] & "' class='rv'>", "", [@mi], ASC )
     // Radio vị trí tuần: p0 = tuần hiện tại (mặc định), p1 = lùi 1 tuần, ...
     & CONCATENATEX ( _pos, "<input type='radio' name='pw' id='p" & [Value] & "' class='rv'" & IF ( [Value] = 0, " checked", "" ) & ">", "", [Value], ASC )
     // Lưới cột tháng của khung Team (độ rộng theo số tuần mỗi tháng)
@@ -1235,35 +1233,60 @@ VAR _mxCard =
     & "#kM:checked~.mx .trw{grid-template-columns:" & _mCols & "}"
     // Chi tiết tuần: hiện khối của tuần đang chọn, ẩn các khung khác, tô đậm số tuần đang chọn
     // Đang xem chi tiết 1 tuần: tuần hiện tại chỉ còn viền xanh nhạt, xanh đặc dành cho tuần đang chọn
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .wh.cw b", ",", [@r], ASC ) & "{background:none;color:#2563EB;box-shadow:inset 0 0 0 1.5px #93C5FD}"
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .wd" & [@r] & "{display:block}#w" & [@r] & ":checked~.mx .wh.wk" & [@r] & " b{background:#1D4ED8;color:#fff;box-shadow:0 0 0 3px #BFDBFE}#w" & [@r] & ":checked~.mx .wk" & [@r] & " .wl1{display:none}#w" & [@r] & ":checked~.mx .wq" & [@r] & "{display:block}", "", [@r], ASC )
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .vwp,#w" & [@r] & ":checked~.mx .vwm,#w" & [@r] & ":checked~.mx .vwt,#w" & [@r] & ":checked~.mx>.mhd", ",", [@r], ASC ) & "{display:none}"
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx>.whd", ",", [@r], ASC ) & "{display:grid}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx .wh.cw b", ",", [@r], ASC ) & "{background:none;color:#2563EB;box-shadow:inset 0 0 0 1.5px #93C5FD}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx .wd" & [@r] & "{display:block}#w" & [@r] & ":checked~.main .mx .wh.wk" & [@r] & " b{background:#1D4ED8;color:#fff;box-shadow:0 0 0 3px #BFDBFE}#w" & [@r] & ":checked~.main .mx .wk" & [@r] & " .wl1{display:none}#w" & [@r] & ":checked~.main .mx .wq" & [@r] & "{display:block}", "", [@r], ASC )
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx .vwp,#w" & [@r] & ":checked~.main .mx .vwm,#w" & [@r] & ":checked~.main .mx .vwt,#w" & [@r] & ":checked~.main .mx>.mhd", ",", [@r], ASC ) & "{display:none}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx>.whd", ",", [@r], ASC ) & "{display:grid}"
     // Chọn tuần / tháng nào thì chỉ cái đó tô xanh: bỏ màu xanh mặc định của tuần hiện tại
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .whd .cw b", ",", [@r], ASC ) & "{background:transparent;color:#1F2937;box-shadow:none}"
-    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.mx .whd .wk" & [@r] & " b{background:#2563EB;color:#fff;box-shadow:none}", "", [@r], ASC )
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx .whd .cw b", ",", [@r], ASC ) & "{background:transparent;color:#1F2937;box-shadow:none}"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .mx .whd .wk" & [@r] & " b{background:#2563EB;color:#fff;box-shadow:none}", "", [@r], ASC )
     // Chi tiết tháng
-    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx .md" & [@mi] & "{display:block}#m" & [@mi] & ":checked~.mx .mhd .mk" & [@mi] & " b{background:#2563EB;color:#fff}#m" & [@mi] & ":checked~.mx .mk" & [@mi] & " .ml1{display:none}#m" & [@mi] & ":checked~.mx .mq" & [@mi] & "{display:block}", "", [@mi], ASC )
-    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx .vwp,#m" & [@mi] & ":checked~.mx .vwm,#m" & [@mi] & ":checked~.mx .vwt,#m" & [@mi] & ":checked~.mx>.whd", ",", [@mi], ASC ) & "{display:none}"
-    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.mx>.mhd", ",", [@mi], ASC ) & "{display:grid}</style>"
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.main .mx .md" & [@mi] & "{display:block}#m" & [@mi] & ":checked~.main .mx .mhd .mk" & [@mi] & " b{background:#2563EB;color:#fff}#m" & [@mi] & ":checked~.main .mx .mk" & [@mi] & " .ml1{display:none}#m" & [@mi] & ":checked~.main .mx .mq" & [@mi] & "{display:block}", "", [@mi], ASC )
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.main .mx .vwp,#m" & [@mi] & ":checked~.main .mx .vwm,#m" & [@mi] & ":checked~.main .mx .vwt,#m" & [@mi] & ":checked~.main .mx>.whd", ",", [@mi], ASC ) & "{display:none}"
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.main .mx>.mhd", ",", [@mi], ASC ) & "{display:grid}</style>"
     & _sum & "<div class='mx'>" & _head & _mHd & "<div class='vwp'>" & _body & "</div><div class='vwm'>" & _mBody & "</div><div class='vwt'>" & _team & "</div>" & _wd & _md & "</div></div>"
 
-// ---------- F. Thẻ Mức tải (theo cửa sổ đang xem) ----------
-// Chỉ tính từ tuần hiện tại trở đi
+// ---------- F. Thẻ Mức tải: một bản cho mặc định (18 tuần tới), từng tuần và từng tháng; CSS hiện bản đang chọn ----------
+// Chỉ tính từ tuần hiện tại trở đi (bản mặc định)
 VAR _uPf = FILTER ( _uP, [@r] >= _curR )
-VAR _sPl = SUMX ( _uPf, [@pl] )
-VAR _sAv = SUMX ( _uPf, [@av] )
-VAR _sFh = SUMX ( _uPf, [@fh] )
-VAR _sOh = SUMX ( _uPf, [@oh] )
-VAR _utl = COALESCE ( DIVIDE ( _sPl, _sAv ), 0 )
 VAR _scope =
     "<div class='scp'>" & IF ( ISFILTERED ( dim_person ), "Theo bộ lọc", "Tất cả" ) & " · " & _nW & " tuần tới</div>"
+// Danh sách giai đoạn: @pk = mã (0 = mặc định, wN = tuần, mN = tháng), @a..@b = khoảng cột tuần, @lb = nhãn
+VAR _per0 = ROW ( "@pk", "0", "@a", COALESCE ( _curR, 1 ), "@b", _nC, "@lb", IF ( ISFILTERED ( dim_person ), "Theo bộ lọc", "Tất cả" ) & " · " & _nW & " tuần tới" )
+VAR _perW =
+    SELECTCOLUMNS (
+        _wk,
+        "@pk", "w" & [@r], "@a", [@r], "@b", [@r],
+        "@lb", "Tuần " & dim_date[KW] & " · " & FORMAT ( dim_date[Week_Start], "dd.MM", "en-US" ) & " – " & FORMAT ( dim_date[Week_Start] + 6, "dd.MM", "en-US" )
+    )
+VAR _perM =
+    SELECTCOLUMNS (
+        _mon,
+        "@pk", "m" & [@mi], "@a", [@r1], "@b", [@r2],
+        "@lb", "Tháng " & MOD ( [@m], 100 ) & "/" & INT ( [@m] / 100 ) & " · " & [@w] & " tuần"
+    )
+VAR _per = UNION ( _per0, _perW, _perM )
 VAR _utCard =
-    "<div class='pnl'><h3>Mức tải</h3>" & _scope
-    & "<div class='big'>" & FORMAT ( _utl * 100, "0", "en-US" ) & "<small>%</small></div>"
-    & "<div class='pb'><i style='width:" & FORMAT ( MIN ( _utl, 1 ) * 100, "0.0", "en-US" ) & "%'></i></div>"
-    & "<div class='ln'><b>" & FORMAT ( _sPl, "#,0", "en-US" ) & "</b> / " & FORMAT ( _sAv, "#,0", "en-US" ) & " h đã xếp lịch</div>"
-    & "<div class='ln'>Trống <b>" & FORMAT ( _sFh, "#,0", "en-US" ) & " h</b> · <span class='red'>Quá tải " & FORMAT ( _sOh, "#,0", "en-US" ) & " h</span></div></div>"
+    "<div class='pnl'><h3>Mức tải</h3>"
+    & CONCATENATEX (
+        _per,
+        VAR vA = [@a]
+        VAR vB = [@b]
+        VAR vX = FILTER ( _uP, [@r] >= vA && [@r] <= vB )
+        VAR vPl = SUMX ( vX, [@pl] )
+        VAR vAv = SUMX ( vX, [@av] )
+        VAR vFh = SUMX ( vX, [@fh] )
+        VAR vOh = SUMX ( vX, [@oh] )
+        VAR vU = COALESCE ( DIVIDE ( vPl, vAv ), 0 )
+        RETURN
+            "<div class='ucv ucx" & [@pk] & "'><div class='scp'>" & [@lb] & "</div>"
+            & "<div class='big'>" & FORMAT ( vU * 100, "0", "en-US" ) & "<small>%</small></div>"
+            & "<div class='pb'><i style='width:" & FORMAT ( MIN ( vU, 1 ) * 100, "0.0", "en-US" ) & "%'></i></div>"
+            & "<div class='ln'><b>" & FORMAT ( vPl, "#,0", "en-US" ) & "</b> / " & FORMAT ( vAv, "#,0", "en-US" ) & " h đã xếp lịch</div>"
+            & "<div class='ln'>Trống <b>" & FORMAT ( vFh, "#,0", "en-US" ) & " h</b> · <span class='red'>Quá tải " & FORMAT ( vOh, "#,0", "en-US" ) & " h</span></div></div>",
+        ""
+      )
+    & "</div>"
 
 // ---------- G. Thẻ Top 5 dự án ----------
 VAR _pjAll =
@@ -1292,19 +1315,35 @@ VAR _pjCard =
       )
     & "</div>"
 
-// ---------- H. Thẻ Ai còn trống (6 người trống nhiều giờ nhất) ----------
-VAR _pf =
-    ADDCOLUMNS ( _ppl, "@f", VAR vP = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uPf, [@key] = vP ), [@fh] ) )
-VAR _top6 = TOPN ( 6, FILTER ( _pf, [@f] > 0 ), [@f], DESC )
+// ---------- H. Thẻ Ai còn trống: 6 người trống nhiều giờ nhất, một bản cho mỗi giai đoạn (như thẻ Mức tải) ----------
 VAR _frCard =
-    "<div class='pnl'><h3>Ai còn trống</h3>" & _scope
-    & "<div class='fhd'><span>Người</span><span>Trống</span></div>"
+    "<div class='pnl'><h3>Ai còn trống</h3>"
     & CONCATENATEX (
-        _top6,
-        "<div class='frw'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>"
-            & "<div class='nt'><b>" & dim_person[Name] & "</b><small>" & dim_person[Role] & " · " & dim_team[Team] & "</small></div>"
-            & "<span class='fp'>" & FORMAT ( [@f], "#,0", "en-US" ) & " h</span></div>",
-        "", [@f], DESC
+        _per,
+        VAR vA = [@a]
+        VAR vB = [@b]
+        VAR vF =
+            ADDCOLUMNS (
+                _ppl,
+                "@f", VAR vP = "P|" & dim_person[Person_ID] RETURN SUMX ( FILTER ( _uP, [@key] = vP && [@r] >= vA && [@r] <= vB ), [@fh] )
+            )
+        VAR vTop = TOPN ( 6, FILTER ( vF, [@f] > 0 ), [@f], DESC, dim_person[Name], ASC )
+        RETURN
+            "<div class='ucv fcx" & [@pk] & "'><div class='scp'>" & [@lb] & "</div>"
+            & "<div class='fhd'><span>Người</span><span>Trống</span></div>"
+            & IF (
+                COUNTROWS ( vTop ) > 0,
+                CONCATENATEX (
+                    vTop,
+                    "<div class='frw'><i class='av a" & RIGHT ( dim_team[Team_ID], 1 ) & "'>" & [@ini] & "</i>"
+                        & "<div class='nt'><b>" & dim_person[Name] & "</b><small>" & dim_person[Role] & " · " & dim_team[Team] & "</small></div>"
+                        & "<span class='fp'>" & FORMAT ( [@f], "#,0", "en-US" ) & " h</span></div>",
+                    "", [@f], DESC, dim_person[Name], ASC
+                ),
+                "<div class='ln' style='padding:12px 0'>Không ai còn trống</div>"
+            )
+            & "</div>",
+        ""
       )
     & "</div>"
 
@@ -1322,6 +1361,16 @@ RETURN
     // Checkbox ẩn của nút nền tối phải đứng ngay trước .dkw (khung bao cả trang)
     & "<input type='checkbox' id='dk' class='rv'><div class='dkw'>"
     & "<div class='pg'>" & _hdr
+    // Radio chi tiết tuần (w0 = tất cả, w1..wN) và tháng (m1..mM): đứng trước .main để điều khiển cả ma trận lẫn cột thẻ bên phải
+    & "<input type='radio' name='wdr' id='w0' class='rv' checked>"
+    & CONCATENATEX ( _wk, "<input type='radio' name='wdr' id='w" & [@r] & "' class='rv'>", "", [@r], ASC )
+    & CONCATENATEX ( _mon, "<input type='radio' name='wdr' id='m" & [@mi] & "' class='rv'>", "", [@mi], ASC )
+    // Thẻ Mức tải / Ai còn trống: hiện bản của tuần hoặc tháng đang chọn, ẩn bản mặc định
+    & "<style>"
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .ucxw" & [@r] & ",#w" & [@r] & ":checked~.main .fcxw" & [@r] & "{display:block}", "", [@r], ASC )
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.main .ucxm" & [@mi] & ",#m" & [@mi] & ":checked~.main .fcxm" & [@mi] & "{display:block}", "", [@mi], ASC )
+    & CONCATENATEX ( _wk, "#w" & [@r] & ":checked~.main .ucx0,#w" & [@r] & ":checked~.main .fcx0", ",", [@r], ASC ) & ","
+    & CONCATENATEX ( _mon, "#m" & [@mi] & ":checked~.main .ucx0,#m" & [@mi] & ":checked~.main .fcx0", ",", [@mi], ASC ) & "{display:none}</style>"
     & "<div class='main'>" & _mxCard & "<div class='side'>" & _utCard & _pjCard & _frCard & "</div></div>"
     & "</div></div>"
     & _cssDark

@@ -14,7 +14,7 @@ T = pd.read_excel(xlsx, sheet_name=None)
 rng = np.random.default_rng(11)
 
 CUR = pd.Timestamp("2026-11-16")          # tuần hiện tại của dữ liệu mẫu: KW 47/2026
-H = 16                                    # tầm nhìn 16 tuần như mẫu
+H = 16                                    # tầm nhìn 16 tuần
 
 # ---------- dim_date: thêm cột tuần ----------
 dd = T["dim_date"]; dd["Date"] = pd.to_datetime(dd["Date"])
@@ -52,7 +52,7 @@ def load(r):
 
 pm = dict(zip(per["Person_ID"], np.clip(rng.normal(1, 0.14, len(per)), 0.72, 1.25)))
 
-# Tuần hiện tại: ép đúng phân bố giống mẫu (frei / <8h frei / überplant / abwesend)
+# Tuần hiện tại: ép theo phân bố mục tiêu (frei / <8h frei / überplant / abwesend)
 ids = list(rng.permutation(per["Person_ID"]))
 cur_cat = {ids[0]: "abw"}
 cur_cat.update({p: "over" for p in ids[1:4]})

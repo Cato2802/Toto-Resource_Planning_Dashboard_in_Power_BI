@@ -1,11 +1,11 @@
-# Data spec: Ressourcenplanung (dữ liệu giả lập)
+# Data spec: Resource Planning (dữ liệu giả lập)
 
-Dựng lại dashboard mẫu "Ressourcenplanung" của Marlon Etzel (xem `design_ref_ressourcenplaner.md`).
-Chủ đề giữ nguyên như mẫu: lập kế hoạch giờ làm cho nhân sự theo tuần. **Toàn bộ là dữ liệu giả**, tên người, dự án, khách hàng đều đặt mới; chỉ giữ tên thành phố Đức như mẫu.
+Dữ liệu cho dashboard kế hoạch nguồn lực.
+Chủ đề: lập kế hoạch giờ làm cho nhân sự theo tuần. **Toàn bộ là dữ liệu giả**, tên người, dự án, khách hàng đều đặt mới; tên thành phố là các thành phố Đức.
 
 ## 1. Panel → measure → cột
 
-| Panel trong mẫu | Số liệu hiển thị | Measure | Cột dữ liệu |
+| Panel | Số liệu hiển thị | Measure | Cột dữ liệu |
 |---|---|---|---|
 | Thanh tóm tắt "KW 47, aktuell" | 4 chip: frei / < 8 h frei / überplant / abwesend | `# Frei KW`, `# Unter8h KW`, `# Ueberplant KW`, `# Abwesend KW` | fact_capacity (Capacity_h, Absence_h), fact_allocation (Planned_h) |
 | Header tuần | số KW, tổng giờ xếp mỗi tuần | `Planned h` | dim_date (Week_Start, KW, KW_Label) |
@@ -37,25 +37,25 @@ Quan hệ (nhiều-một, lọc một chiều):
 - dim_person[Team_ID] → dim_team[Team_ID]
 - dim_project **không** nối tới dim_team (Lead_Team chỉ là cột chữ), để tránh hai đường lọc tới fact_allocation.
 
-Mẫu không so với năm trước nên khoảng thời gian chỉ ~9 tháng: 19 tuần quá khứ + tuần hiện tại + 18 tuần kế hoạch.
+Trang không so với năm trước nên khoảng thời gian chỉ ~9 tháng: 19 tuần quá khứ + tuần hiện tại + 18 tuần kế hoạch.
 
 ## 3. Quy tắc sinh dữ liệu
 - Tuần hiện tại cố định là **KW 47/2026** (bắt đầu 16/11/2026).
 - Quá khứ: mỗi người được xếp khoảng 93 % giờ có mặt.
-- Tương lai: kế hoạch thưa dần, mức tải bắt đầu khoảng 86 % rồi giảm 2,4 điểm mỗi tuần, nên trung bình 16 tuần khoảng 65 % như mẫu.
+- Tương lai: kế hoạch thưa dần, mức tải bắt đầu khoảng 86 % rồi giảm 2,4 điểm mỗi tuần, nên trung bình 16 tuần khoảng 65 %.
 - Mỗi người có hệ số riêng (0,72–1,25), nên có người hay quá tải, có người hay trống.
 - Vắng: khoảng 4 % số người × tuần vắng cả tuần.
-- Tuần hiện tại được ép phân bố giống mẫu: 1 vắng, 3 quá giờ, phần còn lại chia thành nhóm "< 8 h frei" và "frei".
+- Tuần hiện tại được ép theo phân bố mục tiêu: 1 vắng, 3 quá giờ, phần còn lại chia thành nhóm "< 8 h frei" và "frei".
 - Entwickler chủ yếu làm dự án do team mình phụ trách (85 % chỉ 1 dự án/tuần); PM và PO chia giờ cho 2–3 dự án.
 - Giờ làm tròn tới bội số của 2.
 
 Cách tạo: `make_sample_from_spec.py ressourcenplanung.spec.json` tạo các bảng dim, sau đó `build_weekly_facts.py` thêm cột tuần và 2 fact theo tuần (vì spec chỉ hỗ trợ dữ liệu theo ngày hoặc tháng).
 
-## 4. So với mẫu
+## 4. Kiểm tra số liệu so với mục tiêu
 
-| Chỉ số | Mẫu | Dữ liệu sinh |
+| Chỉ số | Mục tiêu | Dữ liệu sinh |
 |---|---|---|
-| Auslastung 16 KW | 65 % (một khung khác: 67 %) | 64,7 % (7.350 / 11.368 h) |
+| Auslastung 16 KW | 65 % | 64,7 % (7.350 / 11.368 h) |
 | Chip tuần hiện tại | 6 frei · 5 < 8 h · 3 überplant · 1 abwesend (15 người) | 7 frei · 9 < 8 h · 3 überplant · 1 abwesend (20 người) |
 | Überplant 16 KW | 9 h | 20 h |
 | Mức tải theo tuần | cao ở tuần gần, nhạt dần ở tuần xa | 84 % → 42 % trong 16 tuần |

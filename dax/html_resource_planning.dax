@@ -1,6 +1,6 @@
 HTML Ressourcenplanung =
 // =====================================================================
-// KẾ HOẠCH NGUỒN LỰC (dựng theo mẫu Ressourcenplanung): 1 measure cho 1 visual HTML Content (Secure)
+// KẾ HOẠCH NGUỒN LỰC: 1 measure cho 1 visual HTML Content (Secure)
 // Hàng 1: tiêu đề + trạng thái bộ lọc
 // Hàng 2: [trái] tóm tắt tuần + ma trận tải (người hoặc team); mở ra luôn ở tuần hiện tại, bấm ‹ › ở hàng tiêu đề để lùi / tiến từng tuần
 //         [phải] Mức tải | Top 5 dự án | Ai còn trống (18 tuần tới)

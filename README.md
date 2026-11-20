@@ -40,7 +40,7 @@ The page answers the questions a staffing lead asks every week: *who has free ho
 
 ## Data model (synthetic data)
 
-All names, projects and customers are invented. The data was generated to match the figures of the reference design (about 65 % utilisation over 16 weeks, 3 people overbooked in the current week).
+All names, projects and customers are invented. The generator is tuned to produce realistic patterns: about 65 % utilisation over the next 16 weeks, a few people overbooked in the current week, plans thinning out further ahead, and occasional absences.
 
 | Table | Grain | Rows |
 |---|---|---|
@@ -60,8 +60,7 @@ dax/html_resource_planning.dax   the HTML measure (paste as a new measure)
 dax/base_measures.dax            base measures: hours, utilisation, free / overbooked hours, counts
 data/                            sample data: Excel workbook + one CSV per table
 scripts/                         Python that generates the sample data (spec + weekly facts)
-docs/design_reference.md         analysis of the reference design (Vietnamese)
-docs/data_spec.md                data specification and checks against the reference (Vietnamese)
+docs/data_spec.md                data specification and generation rules (Vietnamese)
 images/                          screenshots
 ```
 
@@ -75,7 +74,3 @@ images/                          screenshots
 5. New measure → paste `dax/html_resource_planning.dax`, then put it in an **HTML Content** visual (about 2480 × 1560 px on a 2560 px wide page).
 
 To regenerate the data: `python scripts/make_sample_from_spec.py scripts/resource_planning.spec.json --out out` then `python scripts/build_weekly_facts.py out` (needs pandas, numpy, openpyxl).
-
-## Credits
-
-Design and interactions: Marlon Etzel's "Ressourcenplanung" custom visual ([LinkedIn post](https://lnkd.in/p/gYxzAxMW)); the reference images in `images/reference/` are his. Everything else (DAX measure, CSS, data model, synthetic data) is my own work. On-page labels are in Vietnamese.

@@ -1,4 +1,4 @@
-"""Tạo dữ liệu mẫu (giả lập) từ một file cấu hình data_spec.json suy ra từ dashboard mẫu.
+"""Tạo dữ liệu mẫu (giả lập) từ một file cấu hình data_spec.json mô tả các bảng cần tạo.
 
 Chạy:  python3 make_sample_from_spec.py data_spec.json --out ./sample
 Ra:    sample.xlsx (mỗi bảng một sheet) + mỗi bảng một file CSV.
